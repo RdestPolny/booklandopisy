@@ -31,12 +31,12 @@ def get_lubimyczytac_data(url):
         soup = bs(response.text, 'html.parser')
         
         # Pobieranie opisu książki
-        description_div = soup.find('div', class_='book-description')
+        description_div = soup.find('div', id='book-description')
         description = description_div.get_text(strip=True) if description_div else ''
         
         # Pobieranie opinii użytkowników
         reviews = []
-        for review in soup.select('div.review-text'):
+        for review in soup.select('p.expandTextNoJS.p-expanded.js-expanded'):
             text = review.get_text(strip=True)
             if len(text) > 50:  # Filtrujemy krótkie komentarze
                 reviews.append(text)
@@ -67,6 +67,42 @@ def generate_description(book_data):
             {
                 "role": "user",
                 "content": f"OPIS KSIĄŻKI: {book_data.get('description', '')}\nOPINIE CZYTELNIKÓW: {book_data.get('reviews', '')}"
+            },
+            {
+                "role": "user",
+                "content": """Stwórz opis książki w HTML, który:
+
+1. Zaczyna się od mocnego nagłówka <h2> z kreatywnym hasłem nawiązującym do treści książki.
+2. Zawiera sekcje:
+   - <p>Wprowadzenie z głównymi zaletami książki</p>
+   - <p>Szczegółowy opis fabuły/treści z <b>wyróżnionymi</b> słowami kluczowymi</p>
+   - <p>Wartości i korzyści dla czytelnika</p>
+   - <p>Podsumowanie opinii czytelników z konkretnymi przykładami</p>
+   - <h3>Przekonujący call to action</h3>
+
+3. Wykorzystuje opinie czytelników, aby:
+   - Podkreślić najczęściej wymieniane zalety książki
+   - Wzmocnić wiarygodność opisu
+   - Dodać emocje i autentyczność
+
+4. Formatowanie:
+   - Używaj tagów HTML: <h2>, <p>, <b>, <h3>
+   - Wyróżniaj kluczowe frazy za pomocą <b>
+   - Nie używaj znaczników Markdown, tylko HTML
+   - Nie dodawaj komentarzy ani wyjaśnień, tylko sam opis
+
+5. Styl:
+   - Opis ma być angażujący, ale profesjonalny
+   - Używaj słownictwa dostosowanego do gatunku książki
+   - Unikaj powtórzeń
+   - Zachowaj spójność tonu
+
+6. Przykład formatu:
+```html
+<h2>Przygoda na świeżym powietrzu z tatą Oli czeka na każdą rodzinę!</h2>
+<p>„Tata Oli. Tom 3. Z tatą Oli na biwaku” to <b>pełna humoru</b> i <b>przygód</b> opowieść, która z pewnością zachwyci najmłodszych czytelników oraz ich rodziców...</p>
+<h3>Nie czekaj! Przeżyj niezapomniane chwile z tatą Oli i jego dziećmi na biwaku, zamów swoją książkę już dziś!</h3>
+```"""
             }
         ]
         
@@ -82,53 +118,6 @@ def generate_description(book_data):
     except Exception as e:
         st.error(f"Błąd generowania opisu: {str(e)}")
         return ""
-
-def main():
-    if lubimyczytac_urls_input:
-        lubimyczytac_urls = [url.strip() for url in lubimyczytac_urls_input.split('\n') if url.strip()]
-        
-        results = []
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        for idx, url in enumerate(lubimyczytac_urls):
-            try:
-                status_text.info(f'Przetwarzanie {idx+1}/{len(lubimyczytac_urls)}...')
-                progress_bar.progress((idx + 1) / len(lubimyczytac_urls))
-                
-                book_data = get_lubimyczytac_data(url)
-                if book_data.get('error'):
-                    st.error(f"Błąd dla {url}: {book_data['error']}")
-                    continue
-                    
-                new_description = generate_description(book_data)
-                
-                results.append({
-                    'URL': url,
-                    'Stary opis': book_data.get('description', ''),
-                    'Nowy opis': new_description,
-                    'Opinie': book_data.get('reviews', '')
-                })
-                
-                time.sleep(3)  # Uniknięcie zbyt wielu requestów w krótkim czasie
-                
-            except Exception as e:
-                st.error(f"Błąd przetwarzania: {str(e)}")
-                continue
-                
-        if results:
-            df = pd.DataFrame(results)
-            st.dataframe(df, use_container_width=True)
-            
-            csv = df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 Pobierz wygenerowane opisy",
-                data=csv,
-                file_name='wygenerowane_opisy.csv',
-                mime='text/csv'
-            )
-        else:
-            st.warning("⚠️ Nie udało się wygenerować żadnych opisów. Sprawdź wprowadzone URL-e.")
 
 if __name__ == '__main__':
     main()
