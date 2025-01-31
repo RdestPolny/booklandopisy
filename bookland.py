@@ -1,42 +1,54 @@
-
 import streamlit as st
 import pandas as pd
 from openai import OpenAI
-import re
 import requests
 from bs4 import BeautifulSoup as bs
 import time
+import json
+import re
 
 # Inicjalizacja Streamlit UI
-st.title('Generator Opisów Produktów')
+st.title('Generator Opisów Książek')
+
 # Initialize OpenAI client
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-
-# Containers for status messages
-status_container = st.empty()
-progress_bar = st.empty()
-
-# Input fields - dwa pola na URLe
+# Input fields
 col1, col2 = st.columns(2)
 with col1:
     bookland_urls_input = st.text_area('Wprowadź adresy URL z Bookland (po jednym w linii):')
 with col2:
-    taniaksiazka_urls_input = st.text_area('Wprowadź odpowiadające adresy URL z TaniaKsiazka (po jednym w linii):')
+    lubimyczytac_urls_input = st.text_area('Wprowadź adresy URL z LubimyCzytac (po jednym w linii):')
 
-# Initialize OpenAI client
-client = OpenAI(api_key='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')
-
-def create_url_pairs(bookland_urls, taniaksiazka_urls):
-    """Łączy URLe w pary na podstawie ich indeksów."""
-    if len(bookland_urls) != len(taniaksiazka_urls):
-        st.error("Liczba adresów z obu źródeł musi być taka sama!")
-        return []
+def extract_bookland_data(html_content):
+    """Parsuje dane z Bookland z kodu HTML"""
+    soup = bs(html_content, 'html.parser')
     
-    return list(zip(bookland_urls, taniaksiazka_urls))
+    # Metoda 1: Szukanie danych w tagach script
+    script_data = soup.find('script', type='application/ld+json')
+    if script_data:
+        try:
+            product_info = json.loads(script_data.string)
+            return {
+                'title': product_info.get('name', ''),
+                'description': product_info.get('description', ''),
+                'error': None
+            }
+        except json.JSONDecodeError:
+            pass
+    
+    # Metoda 2: Alternatywne parsowanie HTML
+    title = soup.find('h1')
+    description = soup.select_one('.product-description, .description, .product-info')
+    
+    return {
+        'title': title.get_text(strip=True) if title else '',
+        'description': description.get_text(strip=True) if description else '',
+        'error': None
+    }
 
-def get_bookland_data(url):
-    """Pobiera dane z Bookland używając requests i BeautifulSoup"""
+def get_bookland_description(url):
+    """Pobiera opis z Bookland z obsługą dynamicznego ładowania"""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
         'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -46,229 +58,134 @@ def get_bookland_data(url):
         response = requests.get(url, headers=headers, timeout=30)
         response.raise_for_status()
         
-        soup = bs(response.text, 'html.parser')
+        # Sprawdź czy treść jest dynamicznie ładowana
+        if '<div id="root">' in response.text:  # Typowy znacznik dla aplikacji React
+            # Pobierz dane poprzez API (jeśli dostępne)
+            product_id = re.search(r'product/(\d+)', url)
+            if product_id:
+                api_url = f"https://www.bookland.com/api/products/{product_id.group(1)}"
+                api_response = requests.get(api_url, headers=headers)
+                if api_response.status_code == 200:
+                    return api_response.json().get('description', '')
         
-        # Pobieranie tytułu
-        h1_element = soup.find('h1')
-        h1 = h1_element.get_text(strip=True) if h1_element else ''
-        
-        # Pobieranie opisu
-        desc_element = soup.select_one('.ProductInformation-Description')
-        description = desc_element.get_text(strip=True) if desc_element else ''
-        
-        return {
-            'h1': h1,
-            'description': description,
-            'error': None
-        }
+        return extract_bookland_data(response.text)
         
     except Exception as e:
-        return {
-            'h1': '',
-            'description': '',
-            'error': f"Błąd pobierania danych: {str(e)}"
-        }
+        return {'error': f"Błąd pobierania: {str(e)}"}
 
-def get_reviews_from_url(url):
+def get_lubimyczytac_reviews(url):
+    """Pobiera opinie z LubimyCzytac"""
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+    }
+    
     try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-            'Accept-Language': 'pl,en-US;q=0.7,en;q=0.3',
-            'Connection': 'keep-alive',
-        }
-        
-        st.write(f"Pobieranie opinii poprzez request z: {url}")
         response = requests.get(url, headers=headers, timeout=30)
-        
-        if response.status_code == 200:
-            soup = bs(response.text, 'html.parser')
-            review_elements = soup.select('p.expandTextNoJS.p-expanded.js-expanded')
-            
-            reviews = []
-            for element in review_elements:
-                review_text = element.get_text(strip=True)
-                if review_text and len(review_text) > 50:
-                    reviews.append(review_text)
-            
-            if reviews:
-                st.write(f"Znaleziono {len(reviews)} opinii")
-                return "\n\n---\n\n".join(reviews)
-            else:
-                st.write("Nie znaleziono opinii na stronie")
-                return ""
-        else:
-            st.write(f"Błąd pobierania strony. Status code: {response.status_code}")
+        if response.status_code != 200:
             return ""
             
+        soup = bs(response.text, 'html.parser')
+        reviews = []
+        
+        # Nowy selektor dla opinii
+        for review in soup.select('div.review-content'):
+            text = review.get_text(strip=True)
+            if len(text) > 50:  # Filtrujemy krótkie komentarze
+                reviews.append(text)
+        
+        return "\n\n---\n\n".join(reviews) if reviews else ""
+        
     except Exception as e:
-        st.write(f"Błąd podczas pobierania opinii: {str(e)}")
+        st.error(f"Błąd pobierania opinii: {str(e)}")
         return ""
 
-def generate_descriptions(matches):
-    total = len(matches)
-    data = []
-    debug_container = st.empty()
-    status_log = st.empty()
-
-    def update_status(message, level="info"):
-        timestamp = time.strftime("%H:%M:%S")
-        if level == "error":
-            status_log.error(f"{timestamp} - {message}")
-        elif level == "success":
-            status_log.success(f"{timestamp} - {message}")
-        else:
-            status_log.info(f"{timestamp} - {message}")
-
+def generate_description(book_data, reviews):
+    """Generuje nowy opis przy użyciu OpenAI"""
     try:
-        for idx, match in enumerate(matches):
-            debug_info = f"Przetwarzanie {idx + 1}/{total}:\nAktualna liczba przetworzonych: {len(data)}"
-            debug_container.text(debug_info)
-            
-            progress = (idx + 1) / total
-            bookland_url = match['URL Bookland']
-            taniaksiazka_url = match['URL TaniaKsiazka']
-            
-            update_status(f"=== Rozpoczynam przetwarzanie produktu {idx + 1}/{total} ===")
-            update_status(f"Bookland URL: {bookland_url}")
+        messages = [
+            {
+                "role": "system",
+                "content": """Jesteś profesjonalnym copywriterem specjalizującym się w tworzeniu opisów książek. 
+                Twórz angażujące opisy w HTML z wykorzystaniem:<h2>, <p>, <b>, <ul>, <li>. 
+                Uwzględnij opinie czytelników."""
+            },
+            {
+                "role": "user",
+                "content": f"TYTUŁ: {book_data.get('title', '')}\nOPIS: {book_data.get('description', '')}\nOPINIE: {reviews}"
+            }
+        ]
+        
+        response = client.chat.completions.create(
+            model="gpt-4-turbo",
+            messages=messages,
+            temperature=0.7,
+            max_tokens=2000
+        )
+        
+        return response.choices[0].message.content
+        
+    except Exception as e:
+        st.error(f"Błąd generowania opisu: {str(e)}")
+        return ""
 
+def main():
+    if bookland_urls_input and lubimyczytac_urls_input:
+        bookland_urls = [url.strip() for url in bookland_urls_input.split('\n') if url.strip()]
+        lubimyczytac_urls = [url.strip() for url in lubimyczytac_urls_input.split('\n') if url.strip()]
+        
+        if len(bookland_urls) != len(lubimyczytac_urls):
+            st.error("Liczba adresów z obu źródeł musi być taka sama!")
+            return
+        
+        results = []
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        for idx, (bookland_url, lubimyczytac_url) in enumerate(zip(bookland_urls, lubimyczytac_urls)):
             try:
-                # Get Bookland data
-                update_status("Pobieranie danych z Bookland...")
-                bookland_data = get_bookland_data(bookland_url)
+                # Aktualizacja statusu
+                status_text.info(f'Przetwarzanie {idx+1}/{len(bookland_urls)}...')
+                progress_bar.progress((idx + 1) / len(bookland_urls))
                 
-                if bookland_data['error']:
-                    update_status(bookland_data['error'], "error")
+                # Pobieranie danych
+                book_data = get_bookland_description(bookland_url)
+                if book_data.get('error'):
+                    st.error(f"Błąd dla {bookland_url}: {book_data['error']}")
                     continue
                     
-                h1 = bookland_data['h1']
-                bookland_description = bookland_data['description']
-                update_status(f"Pobrano tytuł: {h1[:50]}..." if h1 else "Brak tytułu")
-                update_status(f"Pobrano opis (długość: {len(bookland_description)} znaków)")
-
-                # Get reviews from LubimyCzytac
-                reviews = ''
-                try:
-                    lubimyczytac_url = taniaksiazka_url.replace('taniaksiazka.pl', 'lubimyczytac.pl/ksiazka')
-                    update_status("Rozpoczynam pobieranie opinii z LubimyCzytac...")
-                    reviews = get_reviews_from_url(lubimyczytac_url)
-                    if reviews:
-                        update_status(f"Pobrano recenzje (długość: {len(reviews)})")
-                    else:
-                        update_status("Nie znaleziono recenzji")
-                except Exception as e:
-                    update_status(f"Błąd pobierania opinii: {str(e)}", "error")
-
-                # Generate new description
-                if h1 or bookland_description:
-                    update_status("Generowanie nowego opisu...")
-                    content = f"{h1}\n{bookland_description}"
-
-                    messages = [
-                        {"role": "system", "content": """Jesteś ekspertem w tworzeniu opisów produktów książkowych, 
-                        specjalizującym się w SEO i marketingu. Tworzysz przekonujące, angażujące opisy, 
-                        które skutecznie prezentują książkę potencjalnym czytelnikom."""},
-                        {"role": "user", "content": f"Oto tytuł i aktualny opis książki:\n{content}\n"}
-                    ]
-
-                    if reviews:
-                        messages.append({"role": "user", "content": f"Oto autentyczne opinie czytelników o tej książce:\n{reviews}"})
-
-                    messages.append({"role": "user", "content": """Stwórz optymalizowany pod SEO opis książki w HTML. Opis powinien:
-
-1. Wykorzystywać tagi HTML (nie Markdown):
-   - <h2> dla podtytułów sekcji
-   - <p> dla paragrafów
-   - <b> dla wyróżnienia kluczowych fraz
-   - <ul>/<li> dla list
-
-2. Zawierać następujące sekcje:
-<h2>{Unikalne, kreatywne hasło związane z treścią książki - NIE UŻYWAJ standardowych fraz jak "Odkryj tajemnice", "Poznaj", "Zanurz się". Zamiast tego użyj specyficznego odwołania do treści książki, np. dla kryminału: "Mroczne uliczki Krakowa kryją zabójczą tajemnicę" lub dla książki fantasy: "Smocze królestwa wzywają śmiałków"}.</h2>
-   <p>{Wprowadzenie prezentujące główne zalety i unikalne cechy książki}</p>
-   <p>{Szczegółowy opis fabuły/treści z <b>wyróżnionymi</b> słowami kluczowymi}</p>
-   <p>{Wartości i korzyści dla czytelnika}</p>
-   <p>{Określenie grupy docelowej i rekomendacje}</p>
-   <p>{Podsumowanie opinii czytelników z nawiązaniem do konkretów}</p>
-   <h3>Przekonujący call to action</h3>
-
-3. Wykorzystywać słownictwo odpowiednie dla gatunku książki i dostosowane do odbiorców. Nie zwracaj żadnych dodatkowych komentarzy tylko sam opis"""})
-
-                    update_status("Wysyłanie zapytania do GPT...")
-                    response = client.chat.completions.create(
-                        model='gpt-4o-mini',
-                        messages=messages,
-                        max_tokens=4000,
-                        temperature=0.7,
-                        n=1
-                    )
-
-                    generated_text = response.choices[0].message.content.strip()
-                    update_status("Otrzymano odpowiedź z GPT")
-                    
-                    if '**' in generated_text or '#' in generated_text:
-                        update_status("Konwersja znaczników markdown na HTML...")
-                        generated_text = generated_text.replace('**', '<b>').replace('**', '</b>')
-                        generated_text = re.sub(r'^#\s+', '<h1>', generated_text, flags=re.MULTILINE)
-                        generated_text = re.sub(r'^##\s+', '<h2>', generated_text, flags=re.MULTILINE)
-                        generated_text = re.sub(r'^###\s+', '<h3>', generated_text, flags=re.MULTILINE)
-
-                    if not generated_text.startswith('```html'):
-                        generated_text = f"```html\n{generated_text}\n```"
-
-                    data.append({
-                        'URL Bookland': bookland_url,
-                        'URL TaniaKsiazka': taniaksiazka_url,
-                        'Wygenerowany opis HTML': generated_text,
-                        'Opinie z Lubimy Czytać': reviews,
-                        'Stary opis Bookland': bookland_description,
-                        'H1': h1,
-                    })
-                    update_status(f"Dodano nowy opis. Aktualna liczba opisów: {len(data)}", "success")
-
+                reviews = get_lubimyczytac_reviews(lubimyczytac_url)
+                
+                # Generowanie opisu
+                new_description = generate_description(book_data, reviews)
+                
+                results.append({
+                    'URL Bookland': bookland_url,
+                    'URL LubimyCzytac': lubimyczytac_url,
+                    'Tytuł': book_data.get('title', ''),
+                    'Stary opis': book_data.get('description', ''),
+                    'Nowy opis': new_description,
+                    'Opinie': reviews
+                })
+                
+                time.sleep(3)  # Ograniczenie requestów
+                
             except Exception as e:
-                update_status(f"Błąd dla URL {bookland_url}: {str(e)}", "error")
-
-            status_container.info(f'Przetworzono {idx + 1} z {total} produktów')
-            progress_bar.progress(progress)
+                st.error(f"Błąd przetwarzania: {str(e)}")
+                continue
+                
+        if results:
+            df = pd.DataFrame(results)
+            st.dataframe(df, use_container_width=True)
             
-            update_status("Przerwa przed następnym produktem...")
-            time.sleep(3)  # Ograniczenie requestów
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="Pobierz dane",
+                data=csv,
+                file_name='wygenerowane_opisy.csv',
+                mime='text/csv'
+            )
+        else:
+            st.warning("Nie udało się wygenerować żadnych opisów")
 
-        update_status(f"Zakończono przetwarzanie. Liczba zebranych opisów: {len(data)}", "success")
-        return data
-
-    except Exception as e:
-        update_status(f"Błąd krytyczny: {str(e)}", "error")
-        return []
-
-# Main logic
-if bookland_urls_input and taniaksiazka_urls_input:
-    bookland_urls = [url.strip() for url in bookland_urls_input.strip().split('\n') if url.strip()]
-    taniaksiazka_urls = [url.strip() for url in taniaksiazka_urls_input.strip().split('\n') if url.strip()]
-    
-    # Tworzenie par URLi
-    url_pairs = create_url_pairs(bookland_urls, taniaksiazka_urls)
-    
-    if url_pairs:
-        if 'matches' not in st.session_state:
-            st.session_state.matches = [{'URL Bookland': b, 'URL TaniaKsiazka': t} for b, t in url_pairs]
-        
-        matches_df = pd.DataFrame(st.session_state.matches)
-        st.write("Wprowadzone pary adresów:")
-        st.dataframe(matches_df)
-
-        # Generate descriptions button
-        if st.button('Generuj opisy'):
-            data = generate_descriptions(st.session_state.matches)
-            if data:
-                df = pd.DataFrame(data)
-                st.dataframe(df, height=400)
-                csv = df.to_csv(index=False)
-                st.download_button(
-                    label='Pobierz wszystko w CSV',
-                    data=csv,
-                    file_name='opis_ksiazek.csv',
-                    mime='text/csv'
-                )
-            else:
-                st.info('Brak danych do wyświetlenia.')
+if __name__ == '__main__':
+    main()
