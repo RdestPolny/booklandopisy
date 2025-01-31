@@ -6,7 +6,10 @@ import requests
 from bs4 import BeautifulSoup as bs
 from playwright.sync_api import sync_playwright
 import time
+import os
 
+# Instalacja Playwright oraz przeglądarek przy każdym uruchomieniu aplikacji
+os.system("playwright install --with-deps")
 # Inicjalizacja Streamlit UI
 st.title('Generator Opisów Produktów')
 
