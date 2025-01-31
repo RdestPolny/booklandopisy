@@ -94,7 +94,7 @@ messages = [
    - Unikaj powtórzeń
    - Zachowaj spójność tonu
 
-6. Przykład formatu dla fikcyjnej książki:
+6. Przykład formatu:
 ```html
 <h2>Przygoda na świeżym powietrzu z tatą Oli czeka na każdą rodzinę!</h2>
 <p>„Tata Oli. Tom 3. Z tatą Oli na biwaku” to <b>pełna humoru</b> i <b>przygód</b> opowieść, która z pewnością zachwyci najmłodszych czytelników oraz ich rodziców. Ta książka łączy w sobie <b>fantastyczne ilustracje</b> z doskonałym tekstem, który bawi do łez, a jednocześnie skłania do refleksji nad <b>relacjami rodzinnymi</b>.</p>
@@ -105,8 +105,7 @@ messages = [
 <h3>Nie czekaj! Przeżyj niezapomniane chwile z tatą Oli i jego dziećmi na biwaku, zamów swoją książkę już dziś!</h3>
 ```"""
     }
-]
-           
+] 
         
         response = client.chat.completions.create(
             model="gpt-4-turbo",
