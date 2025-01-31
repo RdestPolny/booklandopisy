@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 from openai import OpenAI
@@ -8,6 +9,9 @@ import time
 
 # Inicjalizacja Streamlit UI
 st.title('Generator Opisów Produktów')
+# Initialize OpenAI client
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
 
 # Containers for status messages
 status_container = st.empty()
@@ -21,7 +25,7 @@ with col2:
     taniaksiazka_urls_input = st.text_area('Wprowadź odpowiadające adresy URL z TaniaKsiazka (po jednym w linii):')
 
 # Initialize OpenAI client
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+client = OpenAI(api_key='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')
 
 def create_url_pairs(bookland_urls, taniaksiazka_urls):
     """Łączy URLe w pary na podstawie ich indeksów."""
@@ -32,46 +36,74 @@ def create_url_pairs(bookland_urls, taniaksiazka_urls):
     return list(zip(bookland_urls, taniaksiazka_urls))
 
 def get_bookland_data(url):
-    """ Pobiera tytuł i opis książki z Bookland przy użyciu requests + BeautifulSoup """
+    """Pobiera dane z Bookland używając requests i BeautifulSoup"""
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7',
     }
     
     try:
         response = requests.get(url, headers=headers, timeout=30)
-        if response.status_code == 200:
-            soup = bs(response.text, "html.parser")
-            title_element = soup.select_one("h1")
-            desc_element = soup.select_one(".ProductInformation-Description, .description, .product-description")
-            
-            title = title_element.get_text(strip=True) if title_element else "Brak tytułu"
-            description = desc_element.get_text("\n", strip=True) if desc_element else "Brak opisu"
-
-            return title, description
-        else:
-            return "Błąd pobierania", "Nie udało się pobrać strony"
+        response.raise_for_status()
+        
+        soup = bs(response.text, 'html.parser')
+        
+        # Pobieranie tytułu
+        h1_element = soup.find('h1')
+        h1 = h1_element.get_text(strip=True) if h1_element else ''
+        
+        # Pobieranie opisu
+        desc_element = soup.select_one('.ProductInformation-Description')
+        description = desc_element.get_text(strip=True) if desc_element else ''
+        
+        return {
+            'h1': h1,
+            'description': description,
+            'error': None
+        }
+        
     except Exception as e:
-        return "Błąd pobierania", str(e)
+        return {
+            'h1': '',
+            'description': '',
+            'error': f"Błąd pobierania danych: {str(e)}"
+        }
 
-def get_reviews_from_lubimyczytac(url):
-    """ Pobiera opinie z LubimyCzytać przy użyciu requests + BeautifulSoup """
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-    }
-    
+def get_reviews_from_url(url):
     try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'pl,en-US;q=0.7,en;q=0.3',
+            'Connection': 'keep-alive',
+        }
+        
+        st.write(f"Pobieranie opinii poprzez request z: {url}")
         response = requests.get(url, headers=headers, timeout=30)
+        
         if response.status_code == 200:
-            soup = bs(response.text, "html.parser")
-            review_elements = soup.select("div.review__text p, p.expandTextNoJS.p-expanded.js-expanded")
-
-            reviews = [element.get_text(strip=True) for element in review_elements if len(element.get_text(strip=True)) > 50]
+            soup = bs(response.text, 'html.parser')
+            review_elements = soup.select('p.expandTextNoJS.p-expanded.js-expanded')
             
-            return "\n\n---\n\n".join(reviews) if reviews else "Brak opinii"
+            reviews = []
+            for element in review_elements:
+                review_text = element.get_text(strip=True)
+                if review_text and len(review_text) > 50:
+                    reviews.append(review_text)
+            
+            if reviews:
+                st.write(f"Znaleziono {len(reviews)} opinii")
+                return "\n\n---\n\n".join(reviews)
+            else:
+                st.write("Nie znaleziono opinii na stronie")
+                return ""
         else:
-            return "Błąd pobierania opinii"
+            st.write(f"Błąd pobierania strony. Status code: {response.status_code}")
+            return ""
+            
     except Exception as e:
-        return f"Błąd: {str(e)}"
+        st.write(f"Błąd podczas pobierania opinii: {str(e)}")
+        return ""
 
 def generate_descriptions(matches):
     total = len(matches)
@@ -88,94 +120,155 @@ def generate_descriptions(matches):
         else:
             status_log.info(f"{timestamp} - {message}")
 
-    for idx, match in enumerate(matches):
-        debug_info = f"Przetwarzanie {idx + 1}/{total}:\nAktualna liczba przetworzonych: {len(data)}"
-        debug_container.text(debug_info)
-        
-        progress = (idx + 1) / total
-        bookland_url = match['URL Bookland']
-        taniaksiazka_url = match['URL TaniaKsiazka']
+    try:
+        for idx, match in enumerate(matches):
+            debug_info = f"Przetwarzanie {idx + 1}/{total}:\nAktualna liczba przetworzonych: {len(data)}"
+            debug_container.text(debug_info)
+            
+            progress = (idx + 1) / total
+            bookland_url = match['URL Bookland']
+            taniaksiazka_url = match['URL TaniaKsiazka']
+            
+            update_status(f"=== Rozpoczynam przetwarzanie produktu {idx + 1}/{total} ===")
+            update_status(f"Bookland URL: {bookland_url}")
 
-        update_status(f"📖 Przetwarzanie książki {idx + 1}/{total}")
+            try:
+                # Get Bookland data
+                update_status("Pobieranie danych z Bookland...")
+                bookland_data = get_bookland_data(bookland_url)
+                
+                if bookland_data['error']:
+                    update_status(bookland_data['error'], "error")
+                    continue
+                    
+                h1 = bookland_data['h1']
+                bookland_description = bookland_data['description']
+                update_status(f"Pobrano tytuł: {h1[:50]}..." if h1 else "Brak tytułu")
+                update_status(f"Pobrano opis (długość: {len(bookland_description)} znaków)")
 
-        try:
-            # Pobranie danych z Bookland
-            title, bookland_description = get_bookland_data(bookland_url)
-            update_status(f"📗 Tytuł: {title}")
-            update_status(f"📝 Opis z Bookland (długość: {len(bookland_description)} znaków)")
+                # Get reviews from LubimyCzytac
+                reviews = ''
+                try:
+                    lubimyczytac_url = taniaksiazka_url.replace('taniaksiazka.pl', 'lubimyczytac.pl/ksiazka')
+                    update_status("Rozpoczynam pobieranie opinii z LubimyCzytac...")
+                    reviews = get_reviews_from_url(lubimyczytac_url)
+                    if reviews:
+                        update_status(f"Pobrano recenzje (długość: {len(reviews)})")
+                    else:
+                        update_status("Nie znaleziono recenzji")
+                except Exception as e:
+                    update_status(f"Błąd pobierania opinii: {str(e)}", "error")
 
-            # Pobranie opinii z LubimyCzytać
-            lubimyczytac_url = taniaksiazka_url.replace("taniaksiazka.pl", "lubimyczytac.pl/ksiazka")
-            reviews = get_reviews_from_lubimyczytac(lubimyczytac_url)
+                # Generate new description
+                if h1 or bookland_description:
+                    update_status("Generowanie nowego opisu...")
+                    content = f"{h1}\n{bookland_description}"
 
-            # Generowanie nowego opisu
-            if title or bookland_description:
-                update_status("✨ Generowanie nowego opisu...")
-                content = f"{title}\n{bookland_description}"
+                    messages = [
+                        {"role": "system", "content": """Jesteś ekspertem w tworzeniu opisów produktów książkowych, 
+                        specjalizującym się w SEO i marketingu. Tworzysz przekonujące, angażujące opisy, 
+                        które skutecznie prezentują książkę potencjalnym czytelnikom."""},
+                        {"role": "user", "content": f"Oto tytuł i aktualny opis książki:\n{content}\n"}
+                    ]
 
-                messages = [
-                    {"role": "system", "content": """Jesteś ekspertem w tworzeniu opisów produktów książkowych, 
-                    specjalizującym się w SEO i marketingu. Tworzysz przekonujące, angażujące opisy, 
-                    które skutecznie prezentują książkę potencjalnym czytelnikom."""},
-                    {"role": "user", "content": f"Oto tytuł i aktualny opis książki:\n{content}\n"}
-                ]
+                    if reviews:
+                        messages.append({"role": "user", "content": f"Oto autentyczne opinie czytelników o tej książce:\n{reviews}"})
 
-                if reviews:
-                    messages.append({"role": "user", "content": f"Oto autentyczne opinie czytelników:\n{reviews}"})
+                    messages.append({"role": "user", "content": """Stwórz optymalizowany pod SEO opis książki w HTML. Opis powinien:
 
-                messages.append({"role": "user", "content": """Stwórz optymalizowany pod SEO opis książki w HTML. Opis powinien:
+1. Wykorzystywać tagi HTML (nie Markdown):
+   - <h2> dla podtytułów sekcji
+   - <p> dla paragrafów
+   - <b> dla wyróżnienia kluczowych fraz
+   - <ul>/<li> dla list
 
-<h2>{Unikalny nagłówek nawiązujący do treści książki}</h2>
-<p>{Wprowadzenie z najważniejszymi informacjami o książce}</p>
-<p><b>{Opis fabuły}</b> – kluczowe informacje</p>
-<p>{Korzyści dla czytelnika}</p>
-<p>{Grupa docelowa i rekomendacje}</p>
-<h3>{Call to action}</h3>
-Nie zwracaj żadnych dodatkowych komentarzy, tylko sam opis."""})
+2. Zawierać następujące sekcje:
+<h2>{Unikalne, kreatywne hasło związane z treścią książki - NIE UŻYWAJ standardowych fraz jak "Odkryj tajemnice", "Poznaj", "Zanurz się". Zamiast tego użyj specyficznego odwołania do treści książki, np. dla kryminału: "Mroczne uliczki Krakowa kryją zabójczą tajemnicę" lub dla książki fantasy: "Smocze królestwa wzywają śmiałków"}.</h2>
+   <p>{Wprowadzenie prezentujące główne zalety i unikalne cechy książki}</p>
+   <p>{Szczegółowy opis fabuły/treści z <b>wyróżnionymi</b> słowami kluczowymi}</p>
+   <p>{Wartości i korzyści dla czytelnika}</p>
+   <p>{Określenie grupy docelowej i rekomendacje}</p>
+   <p>{Podsumowanie opinii czytelników z nawiązaniem do konkretów}</p>
+   <h3>Przekonujący call to action</h3>
 
-                response = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=messages,
-                    max_tokens=4000,
-                    temperature=0.7,
-                    n=1
-                )
+3. Wykorzystywać słownictwo odpowiednie dla gatunku książki i dostosowane do odbiorców. Nie zwracaj żadnych dodatkowych komentarzy tylko sam opis"""})
 
-                generated_text = response.choices[0].message.content.strip()
-                update_status("✅ Otrzymano odpowiedź z GPT")
+                    update_status("Wysyłanie zapytania do GPT...")
+                    response = client.chat.completions.create(
+                        model='gpt-4o-mini',
+                        messages=messages,
+                        max_tokens=4000,
+                        temperature=0.7,
+                        n=1
+                    )
 
-                data.append({
-                    "URL Bookland": bookland_url,
-                    "URL TaniaKsiazka": taniaksiazka_url,
-                    "Wygenerowany opis HTML": generated_text,
-                    "Opinie z Lubimy Czytać": reviews,
-                    "Stary opis Bookland": bookland_description,
-                    "Tytuł": title,
-                })
+                    generated_text = response.choices[0].message.content.strip()
+                    update_status("Otrzymano odpowiedź z GPT")
+                    
+                    if '**' in generated_text or '#' in generated_text:
+                        update_status("Konwersja znaczników markdown na HTML...")
+                        generated_text = generated_text.replace('**', '<b>').replace('**', '</b>')
+                        generated_text = re.sub(r'^#\s+', '<h1>', generated_text, flags=re.MULTILINE)
+                        generated_text = re.sub(r'^##\s+', '<h2>', generated_text, flags=re.MULTILINE)
+                        generated_text = re.sub(r'^###\s+', '<h3>', generated_text, flags=re.MULTILINE)
 
-        except Exception as e:
-            update_status(f"❌ Błąd dla URL {bookland_url}: {str(e)}", "error")
+                    if not generated_text.startswith('```html'):
+                        generated_text = f"```html\n{generated_text}\n```"
 
-        status_container.info(f'📘 Przetworzono {idx + 1} z {total} produktów')
-        progress_bar.progress(progress)
+                    data.append({
+                        'URL Bookland': bookland_url,
+                        'URL TaniaKsiazka': taniaksiazka_url,
+                        'Wygenerowany opis HTML': generated_text,
+                        'Opinie z Lubimy Czytać': reviews,
+                        'Stary opis Bookland': bookland_description,
+                        'H1': h1,
+                    })
+                    update_status(f"Dodano nowy opis. Aktualna liczba opisów: {len(data)}", "success")
 
-    return data
+            except Exception as e:
+                update_status(f"Błąd dla URL {bookland_url}: {str(e)}", "error")
 
+            status_container.info(f'Przetworzono {idx + 1} z {total} produktów')
+            progress_bar.progress(progress)
+            
+            update_status("Przerwa przed następnym produktem...")
+            time.sleep(3)  # Ograniczenie requestów
+
+        update_status(f"Zakończono przetwarzanie. Liczba zebranych opisów: {len(data)}", "success")
+        return data
+
+    except Exception as e:
+        update_status(f"Błąd krytyczny: {str(e)}", "error")
+        return []
 
 # Main logic
 if bookland_urls_input and taniaksiazka_urls_input:
-    bookland_urls = [url.strip() for url in bookland_urls_input.strip().split("\n") if url.strip()]
-    taniaksiazka_urls = [url.strip() for url in taniaksiazka_urls_input.strip().split("\n") if url.strip()]
+    bookland_urls = [url.strip() for url in bookland_urls_input.strip().split('\n') if url.strip()]
+    taniaksiazka_urls = [url.strip() for url in taniaksiazka_urls_input.strip().split('\n') if url.strip()]
     
+    # Tworzenie par URLi
     url_pairs = create_url_pairs(bookland_urls, taniaksiazka_urls)
     
     if url_pairs:
-        st.session_state.matches = [{"URL Bookland": b, "URL TaniaKsiazka": t} for b, t in url_pairs]
+        if 'matches' not in st.session_state:
+            st.session_state.matches = [{'URL Bookland': b, 'URL TaniaKsiazka': t} for b, t in url_pairs]
+        
+        matches_df = pd.DataFrame(st.session_state.matches)
+        st.write("Wprowadzone pary adresów:")
+        st.dataframe(matches_df)
 
-        if st.button("Generuj opisy"):
+        # Generate descriptions button
+        if st.button('Generuj opisy'):
             data = generate_descriptions(st.session_state.matches)
             if data:
                 df = pd.DataFrame(data)
                 st.dataframe(df, height=400)
                 csv = df.to_csv(index=False)
-                st.download_button(label="📥 Pobierz wszystko w CSV", data=csv, file_name="opis_ksiazek.csv", mime="text/csv")
+                st.download_button(
+                    label='Pobierz wszystko w CSV',
+                    data=csv,
+                    file_name='opis_ksiazek.csv',
+                    mime='text/csv'
+                )
+            else:
+                st.info('Brak danych do wyświetlenia.')
