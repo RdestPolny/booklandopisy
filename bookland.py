@@ -31,7 +31,7 @@ def get_lubimyczytac_data(url):
         description_div = soup.find('div', id='book-description')
         description = description_div.get_text(strip=True) if description_div else ''
         
-        # Pobieranie opinii z określonego selektora
+        # Pobieranie opinii użytkowników
         reviews = []
         for review in soup.select('p.expandTextNoJS.p-expanded.js-expanded'):
             text = review.get_text(strip=True)
@@ -52,22 +52,22 @@ def get_lubimyczytac_data(url):
         }
 
 def generate_description(book_data):
-    """Generuje nowy opis przy użyciu OpenAI"""
+    """Generuje nowy opis książki przy użyciu OpenAI"""
     try:
-messages = [
-    {
-        "role": "system",
-        "content": """Jesteś profesjonalnym copywriterem specjalizującym się w tworzeniu opisów książek. 
-        Twórz angażujące, optymalizowane pod SEO opisy w HTML, które wykorzystują tagi: <h2>, <p>, <b>, <ul>, <li>.
-        Opisy muszą być atrakcyjne dla czytelników, zawierać słowa kluczowe i uwzględniać opinie użytkowników."""
-    },
-    {
-        "role": "user",
-        "content": f"OPIS KSIĄŻKI: {book_data.get('description', '')}\nOPINIE CZYTELNIKÓW: {book_data.get('reviews', '')}"
-    },
-    {
-        "role": "user",
-        "content": """Stwórz opis książki w HTML, który:
+        messages = [
+            {
+                "role": "system",
+                "content": """Jesteś profesjonalnym copywriterem specjalizującym się w tworzeniu opisów książek. 
+                Twórz angażujące, optymalizowane pod SEO opisy w HTML, które wykorzystują tagi: <h2>, <p>, <b>, <ul>, <li>.
+                Opisy muszą być atrakcyjne dla czytelników, zawierać słowa kluczowe i uwzględniać opinie użytkowników."""
+            },
+            {
+                "role": "user",
+                "content": f"OPIS KSIĄŻKI: {book_data.get('description', '')}\nOPINIE CZYTELNIKÓW: {book_data.get('reviews', '')}"
+            },
+            {
+                "role": "user",
+                "content": """Stwórz opis książki w HTML, który:
 
 1. Zaczyna się od mocnego nagłówka <h2> z kreatywnym hasłem nawiązującym do treści książki.
 2. Zawiera sekcje:
@@ -86,26 +86,9 @@ messages = [
    - Używaj tagów HTML: <h2>, <p>, <b>, <h3>
    - Wyróżniaj kluczowe frazy za pomocą <b>
    - Nie używaj znaczników Markdown, tylko HTML
-   - Nie dodawaj komentarzy ani wyjaśnień, tylko sam opis
-
-5. Styl:
-   - Opis ma być angażujący, ale profesjonalny
-   - Używaj słownictwa dostosowanego do gatunku książki
-   - Unikaj powtórzeń
-   - Zachowaj spójność tonu
-
-6. Przykład formatu:
-```html
-<h2>Przygoda na świeżym powietrzu z tatą Oli czeka na każdą rodzinę!</h2>
-<p>„Tata Oli. Tom 3. Z tatą Oli na biwaku” to <b>pełna humoru</b> i <b>przygód</b> opowieść, która z pewnością zachwyci najmłodszych czytelników oraz ich rodziców. Ta książka łączy w sobie <b>fantastyczne ilustracje</b> z doskonałym tekstem, który bawi do łez, a jednocześnie skłania do refleksji nad <b>relacjami rodzinnymi</b>.</p>
-<p>W tej części tata Oli postanawia <b>oderwać dzieci</b> od ekranów i zorganizować im prawdziwy <b>biwak</b>. Wspólnie stają przed nie lada wyzwaniem: muszą <b>rozpalić ognisko</b>, <b>łowić ryby</b> i cieszyć się <b>urokami natury</b>. Jednak zamiast sielanki, napotykają na wiele zabawnych przeszkód, co prowadzi do sytuacji pełnych <b>śmiechu</b> i <b>niespodzianek</b>. Tata Oli, z typową dla siebie pomysłowością, staje przed wyzwaniami, które pokazują, że nie zawsze wszystko idzie zgodnie z planem, a <b>życie na łonie natury</b> może być pełne <b>przygód</b>.</p>
-<p>Książka ta wartościowo rozwija wyobraźnię dzieci, pokazując, że <b>spędzanie czasu z rodziną</b> na świeżym powietrzu może być nie tylko zabawne, ale również <b>edukacyjne</b>. Dzięki humorystycznym sytuacjom z udziałem taty Oli, dzieci uczą się, że dorośli także mają swoje słabości, co czyni tę lekturę <b>uniwersalną</b>.</p>
-<p>„Z tatą Oli na biwaku” to idealna propozycja dla <b>dzieci w wieku przedszkolnym i wczesnoszkolnym</b>, a także dla rodziców, którzy pragną spędzić czas z dziećmi w <b>zabawny</b> i <b>interaktywny</b> sposób. To książka, która rozbawi i dostarczy wielu emocji.</p>
-<p>Czytelnicy zachwycają się nie tylko <b>lekkością</b> i <b>humorem</b> tekstu, ale także <b>ilustracjami</b>, które wzbogacają opowieść. Wiele osób zauważa, że tata Oli staje się wzorem dla dzieci, pokazując, iż <b>rodzicielstwo</b> to sztuka kompromisu i <b>radości</b>, nawet w trudnych sytuacjach.</p>
-<h3>Nie czekaj! Przeżyj niezapomniane chwile z tatą Oli i jego dziećmi na biwaku, zamów swoją książkę już dziś!</h3>
-```"""
-    }
-] 
+   - Nie dodawaj komentarzy ani wyjaśnień, tylko sam opis"""
+            }
+        ]
         
         response = client.chat.completions.create(
             model="gpt-4-turbo",
@@ -130,17 +113,14 @@ def main():
         
         for idx, url in enumerate(lubimyczytac_urls):
             try:
-                # Aktualizacja statusu
                 status_text.info(f'Przetwarzanie {idx+1}/{len(lubimyczytac_urls)}...')
                 progress_bar.progress((idx + 1) / len(lubimyczytac_urls))
                 
-                # Pobieranie danych
                 book_data = get_lubimyczytac_data(url)
                 if book_data.get('error'):
                     st.error(f"Błąd dla {url}: {book_data['error']}")
                     continue
                     
-                # Generowanie opisu
                 new_description = generate_description(book_data)
                 
                 results.append({
@@ -150,7 +130,7 @@ def main():
                     'Opinie': book_data.get('reviews', '')
                 })
                 
-                time.sleep(3)  # Ograniczenie requestów
+                time.sleep(3)  # Uniknięcie zbyt wielu requestów w krótkim czasie
                 
             except Exception as e:
                 st.error(f"Błąd przetwarzania: {str(e)}")
