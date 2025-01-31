@@ -31,8 +31,8 @@ def create_url_pairs(bookland_urls, taniaksiazka_urls):
     
     return list(zip(bookland_urls, taniaksiazka_urls))
 
-def get_bookland_description(url):
-    """ Pobiera opis książki z Bookland przy użyciu requests + BeautifulSoup """
+def get_bookland_data(url):
+    """ Pobiera tytuł i opis książki z Bookland przy użyciu requests + BeautifulSoup """
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
     }
@@ -42,16 +42,36 @@ def get_bookland_description(url):
         if response.status_code == 200:
             soup = bs(response.text, "html.parser")
             title_element = soup.select_one("h1")
-            desc_element = soup.select_one(".ProductInformation-Description")
+            desc_element = soup.select_one(".ProductInformation-Description, .description, .product-description")
             
             title = title_element.get_text(strip=True) if title_element else "Brak tytułu"
-            description = desc_element.get_text(strip=True) if desc_element else "Brak opisu"
+            description = desc_element.get_text("\n", strip=True) if desc_element else "Brak opisu"
 
             return title, description
         else:
             return "Błąd pobierania", "Nie udało się pobrać strony"
     except Exception as e:
         return "Błąd pobierania", str(e)
+
+def get_reviews_from_lubimyczytac(url):
+    """ Pobiera opinie z LubimyCzytać przy użyciu requests + BeautifulSoup """
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=30)
+        if response.status_code == 200:
+            soup = bs(response.text, "html.parser")
+            review_elements = soup.select("div.review__text p, p.expandTextNoJS.p-expanded.js-expanded")
+
+            reviews = [element.get_text(strip=True) for element in review_elements if len(element.get_text(strip=True)) > 50]
+            
+            return "\n\n---\n\n".join(reviews) if reviews else "Brak opinii"
+        else:
+            return "Błąd pobierania opinii"
+    except Exception as e:
+        return f"Błąd: {str(e)}"
 
 def generate_descriptions(matches):
     total = len(matches)
@@ -76,15 +96,17 @@ def generate_descriptions(matches):
         bookland_url = match['URL Bookland']
         taniaksiazka_url = match['URL TaniaKsiazka']
 
-        update_status(f"=== Rozpoczynam przetwarzanie produktu {idx + 1}/{total} ===")
-        update_status(f"📖 Bookland URL: {bookland_url}")
+        update_status(f"📖 Przetwarzanie książki {idx + 1}/{total}")
 
         try:
             # Pobranie danych z Bookland
-            title, bookland_description = get_bookland_description(bookland_url)
+            title, bookland_description = get_bookland_data(bookland_url)
+            update_status(f"📗 Tytuł: {title}")
+            update_status(f"📝 Opis z Bookland (długość: {len(bookland_description)} znaków)")
 
-            update_status(f"📗 Pobrano tytuł: {title}")
-            update_status(f"📝 Opis (długość: {len(bookland_description)} znaków)")
+            # Pobranie opinii z LubimyCzytać
+            lubimyczytac_url = taniaksiazka_url.replace("taniaksiazka.pl", "lubimyczytac.pl/ksiazka")
+            reviews = get_reviews_from_lubimyczytac(lubimyczytac_url)
 
             # Generowanie nowego opisu
             if title or bookland_description:
@@ -98,24 +120,18 @@ def generate_descriptions(matches):
                     {"role": "user", "content": f"Oto tytuł i aktualny opis książki:\n{content}\n"}
                 ]
 
+                if reviews:
+                    messages.append({"role": "user", "content": f"Oto autentyczne opinie czytelników:\n{reviews}"})
+
                 messages.append({"role": "user", "content": """Stwórz optymalizowany pod SEO opis książki w HTML. Opis powinien:
 
-1. Wykorzystywać tagi HTML (nie Markdown):
-   - <h2> dla podtytułów sekcji
-   - <p> dla paragrafów
-   - <b> dla wyróżnienia kluczowych fraz
-   - <ul>/<li> dla list
-
-2. Zawierać następujące sekcje:
-<h2>{Unikalne, kreatywne hasło związane z treścią książki - NIE UŻYWAJ standardowych fraz jak "Odkryj tajemnice", "Poznaj", "Zanurz się". Zamiast tego użyj specyficznego odwołania do treści książki, np. dla kryminału: "Mroczne uliczki Krakowa kryją zabójczą tajemnicę" lub dla książki fantasy: "Smocze królestwa wzywają śmiałków"}.</h2>
-   <p>{Wprowadzenie prezentujące główne zalety i unikalne cechy książki}</p>
-   <p>{Szczegółowy opis fabuły/treści z <b>wyróżnionymi</b> słowami kluczowymi}</p>
-   <p>{Wartości i korzyści dla czytelnika}</p>
-   <p>{Określenie grupy docelowej i rekomendacje}</p>
-   <p>{Podsumowanie opinii czytelników z nawiązaniem do konkretów}</p>
-   <h3>Przekonujący call to action</h3>
-
-3. Wykorzystywać słownictwo odpowiednie dla gatunku książki i dostosowane do odbiorców. Nie zwracaj żadnych dodatkowych komentarzy tylko sam opis"""})
+<h2>{Unikalny nagłówek nawiązujący do treści książki}</h2>
+<p>{Wprowadzenie z najważniejszymi informacjami o książce}</p>
+<p><b>{Opis fabuły}</b> – kluczowe informacje</p>
+<p>{Korzyści dla czytelnika}</p>
+<p>{Grupa docelowa i rekomendacje}</p>
+<h3>{Call to action}</h3>
+Nie zwracaj żadnych dodatkowych komentarzy, tylko sam opis."""})
 
                 response = client.chat.completions.create(
                     model="gpt-4o-mini",
@@ -132,11 +148,10 @@ def generate_descriptions(matches):
                     "URL Bookland": bookland_url,
                     "URL TaniaKsiazka": taniaksiazka_url,
                     "Wygenerowany opis HTML": generated_text,
+                    "Opinie z Lubimy Czytać": reviews,
                     "Stary opis Bookland": bookland_description,
                     "Tytuł": title,
                 })
-
-                update_status(f"🎉 Dodano nowy opis. Aktualna liczba opisów: {len(data)}", "success")
 
         except Exception as e:
             update_status(f"❌ Błąd dla URL {bookland_url}: {str(e)}", "error")
