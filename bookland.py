@@ -22,8 +22,8 @@ with col2:
     taniaksiazka_urls_input = st.text_area('Wprowadź odpowiadające adresy URL z TaniaKsiazka (po jednym w linii):')
 
 # Initialize OpenAI client
-client = OpenAI(api_key='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')
-
+api_key = st.secrets["OPENAI_API_KEY"]
+client = OpenAI(api_key=api_key)
 def create_url_pairs(bookland_urls, taniaksiazka_urls):
     """Łączy URLe w pary na podstawie ich indeksów."""
     if len(bookland_urls) != len(taniaksiazka_urls):
