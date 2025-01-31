@@ -31,9 +31,9 @@ def get_lubimyczytac_data(url):
         description_div = soup.find('div', id='book-description')
         description = description_div.get_text(strip=True) if description_div else ''
         
-        # Pobieranie opinii
+        # Pobieranie opinii z określonego selektora
         reviews = []
-        for review in soup.select('div.review-content'):
+        for review in soup.select('p.expandTextNoJS.p-expanded.js-expanded'):
             text = review.get_text(strip=True)
             if len(text) > 50:  # Filtrujemy krótkie komentarze
                 reviews.append(text)
