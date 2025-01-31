@@ -6,16 +6,13 @@ from bs4 import BeautifulSoup as bs
 import time
 
 # Inicjalizacja Streamlit UI
-st.set_page_config(page_title='Generator Opisów Książek', layout='wide')
-st.title('📚 Generator Opisów Książek')
-st.markdown("""Wprowadź adresy URL z LubimyCzytac, aby automatycznie wygenerować zoptymalizowane opisy książek.""")
+st.title('Generator Opisów Książek')
 
 # Initialize OpenAI client
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # Input field
-st.sidebar.header("🔗 Wprowadź adresy URL")
-lubimyczytac_urls_input = st.sidebar.text_area('Wprowadź URL-e z LubimyCzytać (po jednym w linii):')
+lubimyczytac_urls_input = st.text_area('Wprowadź adresy URL z LubimyCzytac (po jednym w linii):')
 
 def get_lubimyczytac_data(url):
     """Pobiera opis i opinie z LubimyCzytac"""
@@ -34,7 +31,7 @@ def get_lubimyczytac_data(url):
         description_div = soup.find('div', id='book-description')
         description = description_div.get_text(strip=True) if description_div else ''
         
-        # Pobieranie opinii użytkowników
+        # Pobieranie opinii z określonego selektora
         reviews = []
         for review in soup.select('p.expandTextNoJS.p-expanded.js-expanded'):
             text = review.get_text(strip=True)
@@ -55,14 +52,14 @@ def get_lubimyczytac_data(url):
         }
 
 def generate_description(book_data):
-    """Generuje nowy opis książki przy użyciu OpenAI"""
+    """Generuje nowy opis przy użyciu OpenAI"""
     try:
         messages = [
             {
                 "role": "system",
                 "content": """Jesteś profesjonalnym copywriterem specjalizującym się w tworzeniu opisów książek. 
-                Twórz angażujące, optymalizowane pod SEO opisy w HTML, które wykorzystują tagi: <h2>, <p>, <b>, <ul>, <li>.
-                Opisy muszą być atrakcyjne dla czytelników, zawierać słowa kluczowe i uwzględniać opinie użytkowników."""
+                Twórz angażujące opisy w HTML z wykorzystaniem:<h2>, <p>, <b>, <ul>, <li>. 
+                Uwzględnij opinie czytelników."""
             },
             {
                 "role": "user",
@@ -70,44 +67,29 @@ def generate_description(book_data):
             },
             {
                 "role": "user",
-                "content": """Stwórz opis książki w HTML, który:
+                "content": """Stwórz optymalizowany pod SEO opis książki w HTML. Opis powinien:
 
-1. Zaczyna się od mocnego nagłówka <h2> z kreatywnym hasłem nawiązującym do treści książki.
-2. Zawiera sekcje:
-   - <p>Wprowadzenie z głównymi zaletami książki</p>
-   - <p>Szczegółowy opis fabuły/treści z <b>wyróżnionymi</b> słowami kluczowymi</p>
-   - <p>Wartości i korzyści dla czytelnika</p>
-   - <p>Podsumowanie opinii czytelników z konkretnymi przykładami</p>
-   - <h3>Przekonujący call to action</h3>
+1. Wykorzystywać tagi HTML (nie Markdown):
+   - <h2> dla podtytułów sekcji
+   - <p> dla paragrafów
+   - <b> dla wyróżnienia kluczowych fraz
+   - <ul>/<li> dla list
 
-3. Wykorzystuje opinie czytelników, aby:
-   - Podkreślić najczęściej wymieniane zalety książki
-   - Wzmocnić wiarygodność opisu
-   - Dodać emocje i autentyczność
+2. Zawierać następujące sekcje:
+<h2>{Unikalne, kreatywne hasło związane z treścią książki}</h2>
+   <p>{Wprowadzenie prezentujące główne zalety i unikalne cechy książki}</p>
+   <p>{Szczegółowy opis fabuły/treści z <b>wyróżnionymi</b> słowami kluczowymi}</p>
+   <p>{Wartości i korzyści dla czytelnika}</p>
+   <p>{Określenie grupy docelowej i rekomendacje}</p>
+   <p>{Podsumowanie opinii czytelników z nawiązaniem do konkretów}</p>
+   <h3>Przekonujący call to action</h3>
 
-4. Formatowanie:
-   - Używaj tagów HTML: <h2>, <p>, <b>, <h3>
-   - Wyróżniaj kluczowe frazy za pomocą <b>
-   - Nie używaj znaczników Markdown, tylko HTML
-   - Nie dodawaj komentarzy ani wyjaśnień, tylko sam opis
-
-5. Styl:
-   - Opis ma być angażujący, ale profesjonalny
-   - Używaj słownictwa dostosowanego do gatunku książki
-   - Unikaj powtórzeń
-   - Zachowaj spójność tonu
-
-6. Przykład formatu:
-```html
-<h2>Przygoda na świeżym powietrzu z tatą Oli czeka na każdą rodzinę!</h2>
-<p>„Tata Oli. Tom 3. Z tatą Oli na biwaku” to <b>pełna humoru</b> i <b>przygód</b> opowieść, która z pewnością zachwyci najmłodszych czytelników oraz ich rodziców...</p>
-<h3>Nie czekaj! Przeżyj niezapomniane chwile z tatą Oli i jego dziećmi na biwaku, zamów swoją książkę już dziś!</h3>
-```"""
+3. Wykorzystywać słownictwo odpowiednie dla gatunku książki i dostosowane do odbiorców. Nie zwracaj żadnych dodatkowych komentarzy tylko sam opis"""
             }
         ]
         
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4-turbo",
             messages=messages,
             temperature=0.7,
             max_tokens=2000
@@ -118,6 +100,56 @@ def generate_description(book_data):
     except Exception as e:
         st.error(f"Błąd generowania opisu: {str(e)}")
         return ""
+
+def main():
+    if lubimyczytac_urls_input:
+        lubimyczytac_urls = [url.strip() for url in lubimyczytac_urls_input.split('\n') if url.strip()]
+        
+        results = []
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        for idx, url in enumerate(lubimyczytac_urls):
+            try:
+                # Aktualizacja statusu
+                status_text.info(f'Przetwarzanie {idx+1}/{len(lubimyczytac_urls)}...')
+                progress_bar.progress((idx + 1) / len(lubimyczytac_urls))
+                
+                # Pobieranie danych
+                book_data = get_lubimyczytac_data(url)
+                if book_data.get('error'):
+                    st.error(f"Błąd dla {url}: {book_data['error']}")
+                    continue
+                    
+                # Generowanie opisu
+                new_description = generate_description(book_data)
+                
+                results.append({
+                    'URL': url,
+                    'Stary opis': book_data.get('description', ''),
+                    'Nowy opis': new_description,
+                    'Opinie': book_data.get('reviews', '')
+                })
+                
+                time.sleep(3)  # Ograniczenie requestów
+                
+            except Exception as e:
+                st.error(f"Błąd przetwarzania: {str(e)}")
+                continue
+                
+        if results:
+            df = pd.DataFrame(results)
+            st.dataframe(df, use_container_width=True)
+            
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="Pobierz dane",
+                data=csv,
+                file_name='wygenerowane_opisy.csv',
+                mime='text/csv'
+            )
+        else:
+            st.warning("Nie udało się wygenerować żadnych opisów")
 
 if __name__ == '__main__':
     main()
