@@ -6,13 +6,16 @@ from bs4 import BeautifulSoup as bs
 import time
 
 # Inicjalizacja Streamlit UI
-st.title('Generator Opisów Książek')
+st.set_page_config(page_title='Generator Opisów Książek', layout='wide')
+st.title('📚 Generator Opisów Książek')
+st.markdown("""Wprowadź adresy URL z LubimyCzytac, aby automatycznie wygenerować zoptymalizowane opisy książek.""")
 
 # Initialize OpenAI client
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # Input field
-lubimyczytac_urls_input = st.text_area('Wprowadź adresy URL z LubimyCzytac (po jednym w linii):')
+st.sidebar.header("🔗 Wprowadź adresy URL")
+lubimyczytac_urls_input = st.sidebar.text_area('Wprowadź URL-e z LubimyCzytać (po jednym w linii):')
 
 def get_lubimyczytac_data(url):
     """Pobiera opis i opinie z LubimyCzytac"""
@@ -28,12 +31,12 @@ def get_lubimyczytac_data(url):
         soup = bs(response.text, 'html.parser')
         
         # Pobieranie opisu książki
-        description_div = soup.find('div', id='book-description')
+        description_div = soup.find('div', class_='book-description')
         description = description_div.get_text(strip=True) if description_div else ''
         
         # Pobieranie opinii użytkowników
         reviews = []
-        for review in soup.select('p.expandTextNoJS.p-expanded.js-expanded'):
+        for review in soup.select('div.review-text'):
             text = review.get_text(strip=True)
             if len(text) > 50:  # Filtrujemy krótkie komentarze
                 reviews.append(text)
@@ -64,34 +67,11 @@ def generate_description(book_data):
             {
                 "role": "user",
                 "content": f"OPIS KSIĄŻKI: {book_data.get('description', '')}\nOPINIE CZYTELNIKÓW: {book_data.get('reviews', '')}"
-            },
-            {
-                "role": "user",
-                "content": """Stwórz opis książki w HTML, który:
-
-1. Zaczyna się od mocnego nagłówka <h2> z kreatywnym hasłem nawiązującym do treści książki.
-2. Zawiera sekcje:
-   - <p>Wprowadzenie z głównymi zaletami książki</p>
-   - <p>Szczegółowy opis fabuły/treści z <b>wyróżnionymi</b> słowami kluczowymi</p>
-   - <p>Wartości i korzyści dla czytelnika</p>
-   - <p>Podsumowanie opinii czytelników z konkretnymi przykładami</p>
-   - <h3>Przekonujący call to action</h3>
-
-3. Wykorzystuje opinie czytelników, aby:
-   - Podkreślić najczęściej wymieniane zalety książki
-   - Wzmocnić wiarygodność opisu
-   - Dodać emocje i autentyczność
-
-4. Formatowanie:
-   - Używaj tagów HTML: <h2>, <p>, <b>, <h3>
-   - Wyróżniaj kluczowe frazy za pomocą <b>
-   - Nie używaj znaczników Markdown, tylko HTML
-   - Nie dodawaj komentarzy ani wyjaśnień, tylko sam opis"""
             }
         ]
         
         response = client.chat.completions.create(
-            model="gpt-4-turbo",
+            model="gpt-4o-mini",
             messages=messages,
             temperature=0.7,
             max_tokens=2000
@@ -142,13 +122,13 @@ def main():
             
             csv = df.to_csv(index=False).encode('utf-8')
             st.download_button(
-                label="Pobierz dane",
+                label="📥 Pobierz wygenerowane opisy",
                 data=csv,
                 file_name='wygenerowane_opisy.csv',
                 mime='text/csv'
             )
         else:
-            st.warning("Nie udało się wygenerować żadnych opisów")
+            st.warning("⚠️ Nie udało się wygenerować żadnych opisów. Sprawdź wprowadzone URL-e.")
 
 if __name__ == '__main__':
     main()
