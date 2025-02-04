@@ -4,6 +4,9 @@ from openai import OpenAI
 import requests
 from bs4 import BeautifulSoup as bs
 import time
+from requests_html import AsyncHTMLSession
+import asyncio
+import nest_asyncio
 
 # Inicjalizacja Streamlit UI
 st.title('Generator Opisów Książek')
@@ -11,8 +14,12 @@ st.title('Generator Opisów Książek')
 # Initialize OpenAI client
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-# Input field
+# Input fields
+st.subheader("Adresy URL z LubimyCzytac")
 lubimyczytac_urls_input = st.text_area('Wprowadź adresy URL z LubimyCzytac (po jednym w linii):')
+
+st.subheader("Adresy URL z Bookland")
+bookland_urls_input = st.text_area('Wprowadź adresy URL z Bookland (po jednym w linii):')
 
 def get_lubimyczytac_data(url):
     """Pobiera opis i opinie z LubimyCzytac"""
@@ -51,6 +58,32 @@ def get_lubimyczytac_data(url):
             'error': f"Błąd pobierania: {str(e)}"
         }
 
+def get_bookland_data(url):
+    """Pobiera opis z Bookland używając requests-html"""
+    try:
+        session = AsyncHTMLSession()
+        
+        async def get_content():
+            r = await session.get(url)
+            await r.html.arender(timeout=30)
+            
+            description_elem = r.html.find('.ProductInformation-Description', first=True)
+            description = description_elem.text if description_elem else ''
+            
+            return {
+                'description': description,
+                'error': None
+            }
+            
+        nest_asyncio.apply()
+        return asyncio.run(get_content())
+        
+    except Exception as e:
+        return {
+            'description': '',
+            'error': f"Błąd pobierania z Bookland: {str(e)}"
+        }
+
 def generate_description(book_data):
     """Generuje nowy opis przy użyciu OpenAI"""
     try:
@@ -59,11 +92,13 @@ def generate_description(book_data):
                 "role": "system",
                 "content": """Jesteś profesjonalnym copywriterem specjalizującym się w tworzeniu opisów książek. 
                 Twórz angażujące opisy w HTML z wykorzystaniem:<h2>, <p>, <b>, <ul>, <li>. 
-                Uwzględnij opinie czytelników."""
+                Uwzględnij opinie czytelników oraz opis z Bookland."""
             },
             {
                 "role": "user",
-                "content": f"OPIS KSIĄŻKI: {book_data.get('description', '')}\nOPINIE CZYTELNIKÓW: {book_data.get('reviews', '')}"
+                "content": f"""OPIS Z LUBIMYCZYTAC: {book_data.get('lc_description', '')}
+                              OPIS Z BOOKLAND: {book_data.get('bookland_description', '')}
+                              OPINIE CZYTELNIKÓW: {book_data.get('reviews', '')}"""
             },
             {
                 "role": "user",
@@ -77,7 +112,7 @@ def generate_description(book_data):
    - <p>Podsumowanie opinii czytelników z konkretnymi przykładami</p>
    - <h3>Przekonujący call to action</h3>
 
-3. Wykorzystuje opinie czytelników, aby:
+3. Wykorzystuje opinie czytelników i opis z Bookland, aby:
    - Podkreślić najczęściej wymieniane zalety książki
    - Wzmocnić wiarygodność opisu
    - Dodać emocje i autentyczność
@@ -86,29 +121,12 @@ def generate_description(book_data):
    - Używaj tagów HTML: <h2>, <p>, <b>, <h3>
    - Wyróżniaj kluczowe frazy za pomocą <b>
    - Nie używaj znaczników Markdown, tylko HTML
-   - Nie dodawaj komentarzy ani wyjaśnień, tylko sam opis
-
-5. Styl:
-   - Opis ma być angażujący, ale profesjonalny
-   - Używaj słownictwa dostosowanego do gatunku książki
-   - Unikaj powtórzeń
-   - Zachowaj spójność tonu
-
-6. Przykład formatu:
-```html
-<h2>Przygoda na świeżym powietrzu z tatą Oli czeka na każdą rodzinę!</h2>
-<p>„Tata Oli. Tom 3. Z tatą Oli na biwaku” to <b>pełna humoru</b> i <b>przygód</b> opowieść, która z pewnością zachwyci najmłodszych czytelników oraz ich rodziców. Ta książka łączy w sobie <b>fantastyczne ilustracje</b> z doskonałym tekstem, który bawi do łez, a jednocześnie skłania do refleksji nad <b>relacjami rodzinnymi</b>.</p>
-<p>W tej części tata Oli postanawia <b>oderwać dzieci</b> od ekranów i zorganizować im prawdziwy <b>biwak</b>. Wspólnie stają przed nie lada wyzwaniem: muszą <b>rozpalić ognisko</b>, <b>łowić ryby</b> i cieszyć się <b>urokami natury</b>. Jednak zamiast sielanki, napotykają na wiele zabawnych przeszkód, co prowadzi do sytuacji pełnych <b>śmiechu</b> i <b>niespodzianek</b>. Tata Oli, z typową dla siebie pomysłowością, staje przed wyzwaniami, które pokazują, że nie zawsze wszystko idzie zgodnie z planem, a <b>życie na łonie natury</b> może być pełne <b>przygód</b>.</p>
-<p>Książka ta wartościowo rozwija wyobraźnię dzieci, pokazując, że <b>spędzanie czasu z rodziną</b> na świeżym powietrzu może być nie tylko zabawne, ale również <b>edukacyjne</b>. Dzięki humorystycznym sytuacjom z udziałem taty Oli, dzieci uczą się, że dorośli także mają swoje słabości, co czyni tę lekturę <b>uniwersalną</b>.</p>
-<p>„Z tatą Oli na biwaku” to idealna propozycja dla <b>dzieci w wieku przedszkolnym i wczesnoszkolnym</b>, a także dla rodziców, którzy pragną spędzić czas z dziećmi w <b>zabawny</b> i <b>interaktywny</b> sposób. To książka, która rozbawi i dostarczy wielu emocji.</p>
-<p>Czytelnicy zachwycają się nie tylko <b>lekkością</b> i <b>humorem</b> tekstu, ale także <b>ilustracjami</b>, które wzbogacają opowieść. Wiele osób zauważa, że tata Oli staje się wzorem dla dzieci, pokazując, iż <b>rodzicielstwo</b> to sztuka kompromisu i <b>radości</b>, nawet w trudnych sytuacjach.</p>
-<h3>Nie czekaj! Przeżyj niezapomniane chwile z tatą Oli i jego dziećmi na biwaku, zamów swoją książkę już dziś!</h3>
-```"""
+   - Nie dodawaj komentarzy ani wyjaśnień, tylko sam opis"""
             }
         ]
         
         response = client.chat.completions.create(
-            model="gpt-4-turbo",
+            model="gpt-4-mini",
             messages=messages,
             temperature=0.7,
             max_tokens=2000
@@ -121,33 +139,53 @@ def generate_description(book_data):
         return ""
 
 def main():
-    if lubimyczytac_urls_input:
+    if lubimyczytac_urls_input and bookland_urls_input:
+        # Przygotowanie list URL-i
         lubimyczytac_urls = [url.strip() for url in lubimyczytac_urls_input.split('\n') if url.strip()]
+        bookland_urls = [url.strip() for url in bookland_urls_input.split('\n') if url.strip()]
+        
+        # Sprawdzenie czy liczba URL-i się zgadza
+        if len(lubimyczytac_urls) != len(bookland_urls):
+            st.error('Liczba adresów URL z obu źródeł musi być taka sama!')
+            return
         
         results = []
         progress_bar = st.progress(0)
         status_text = st.empty()
         
-        for idx, url in enumerate(lubimyczytac_urls):
+        # Iteracja po sparowanych URL-ach
+        for idx, (lc_url, bookland_url) in enumerate(zip(lubimyczytac_urls, bookland_urls)):
             try:
                 # Aktualizacja statusu
                 status_text.info(f'Przetwarzanie {idx+1}/{len(lubimyczytac_urls)}...')
                 progress_bar.progress((idx + 1) / len(lubimyczytac_urls))
                 
-                # Pobieranie danych
-                book_data = get_lubimyczytac_data(url)
-                if book_data.get('error'):
-                    st.error(f"Błąd dla {url}: {book_data['error']}")
+                # Pobieranie danych z LubimyCzytac
+                lc_data = get_lubimyczytac_data(lc_url)
+                if lc_data.get('error'):
+                    st.error(f"Błąd dla {lc_url}: {lc_data['error']}")
+                    continue
+                
+                # Pobieranie danych z Bookland
+                bookland_data = get_bookland_data(bookland_url)
+                if bookland_data.get('error'):
+                    st.error(f"Błąd dla {bookland_url}: {bookland_data['error']}")
                     continue
                     
                 # Generowanie opisu
-                new_description = generate_description(book_data)
+                new_description = generate_description({
+                    'lc_description': lc_data.get('description', ''),
+                    'bookland_description': bookland_data.get('description', ''),
+                    'reviews': lc_data.get('reviews', '')
+                })
                 
                 results.append({
-                    'URL': url,
-                    'Stary opis': book_data.get('description', ''),
+                    'URL LubimyCzytac': lc_url,
+                    'URL Bookland': bookland_url,
+                    'Opis LubimyCzytac': lc_data.get('description', ''),
+                    'Opis Bookland': bookland_data.get('description', ''),
                     'Nowy opis': new_description,
-                    'Opinie': book_data.get('reviews', '')
+                    'Opinie': lc_data.get('reviews', '')
                 })
                 
                 time.sleep(3)  # Ograniczenie requestów
