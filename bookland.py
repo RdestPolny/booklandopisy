@@ -1,6 +1,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
 from bs4 import BeautifulSoup as bs
+from openai import OpenAI
 import time
 
 # Inicjalizacja Streamlit UI
