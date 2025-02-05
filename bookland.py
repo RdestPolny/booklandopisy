@@ -57,36 +57,41 @@ def get_lubimyczytac_data(url):
         }
 
 def get_bookland_data(url):
-    """Pobiera opis z Bookland używając komponentu React"""
+    """Pobiera opis z Bookland"""
     try:
         # Wyświetl komponent React do scrapowania
         description_container = st.empty()
         description_container.markdown("Ładowanie opisu z Bookland...")
         
-        # Tutaj użyjemy komponentu React
-        components.html(
-            f"""
-            <div id="bookland-scraper"></div>
-            <script>
-                window.addEventListener('message', function(e) {{
-                    if (e.data.type === 'description_found') {{
-                        window.parent.postMessage({{
-                            type: 'streamlit:setComponentValue',
-                            value: e.data.description
-                        }}, '*');
-                    }}
-                }});
-            </script>
-            """,
-            height=100,
-            key=f"scraper_{url}"
-        )
+        # Uproszczony iframe do załadowania strony
+        html_content = f"""
+            <div id="scraper-container">
+                <iframe src="{url}" 
+                        style="width:1px;height:1px;opacity:0;position:absolute;top:-9999px;left:-9999px"
+                        onload="
+                            setTimeout(() => {{
+                                try {{
+                                    const desc = document.querySelector('iframe').contentDocument.querySelector('.ProductInformation-Description');
+                                    if (desc) {{
+                                        document.getElementById('description-output').innerText = desc.innerText;
+                                    }}
+                                }} catch(e) {{
+                                    console.error('Błąd:', e);
+                                }}
+                            }}, 5000);
+                        "
+                ></iframe>
+                <div id="description-output"></div>
+            </div>
+        """
         
-        # Poczekaj na odpowiedź
-        time.sleep(5)  # Daj czas na załadowanie
+        # Wyświetl iframe
+        components.html(html_content, height=100)
+        
+        time.sleep(7)  # Daj więcej czasu na załadowanie
         
         return {
-            'description': "Opis zostanie pobrany przez przeglądarkę",
+            'description': 'Opis powinien zostać pobrany asynchronicznie. Sprawdź wynik w polu "description-output".',
             'error': None
         }
         
