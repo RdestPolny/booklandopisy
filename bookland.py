@@ -56,24 +56,64 @@ def get_lubimyczytac_data(url):
         }
 
 def get_bookland_data(url):
-    """Pobiera opis z Bookland przez GraphQL"""
+    """Pobiera opis z Bookland przez GraphQL z wcześniejszą ekstrakcją ID"""
     try:
-        # Wyciągnij ID produktu z URL
-        product_id = url.split('/')[-1]
-        if not product_id.isdigit():
-            # Jeśli ostatni segment URL nie jest ID, próbujemy znaleźć ID w całym URL
-            import re
-            id_match = re.search(r'/(\d+)(?:[^/]*)?$', url)
-            if id_match:
-                product_id = id_match.group(1)
-            else:
-                return {
-                    'description': '',
-                    'error': 'Nie można znaleźć ID produktu w URL'
-                }
+        # Najpierw pobierz stronę produktu
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7'
+        }
         
+        initial_response = requests.get(url, headers=headers, timeout=30)
+        soup = bs(initial_response.text, 'html.parser')
+        
+        # Szukamy ID produktu w różnych miejscach w HTML
+        product_id = None
+        
+        # Metoda 1: Szukamy w skrypcie JSON-LD
+        script_tag = soup.find('script', type='application/ld+json')
+        if script_tag:
+            import json
+            try:
+                json_data = json.loads(script_tag.string)
+                if isinstance(json_data, dict) and 'sku' in json_data:
+                    product_id = json_data.get('productID') or json_data.get('sku')
+            except:
+                pass
+
+        # Metoda 2: Szukamy w meta tagach
+        if not product_id:
+            meta_product = soup.find('meta', property='product:retailer_item_id')
+            if meta_product:
+                product_id = meta_product.get('content')
+
+        # Metoda 3: Szukamy w atrybutach data-
+        if not product_id:
+            product_elem = soup.find(attrs={'data-product-id': True})
+            if product_elem:
+                product_id = product_elem.get('data-product-id')
+                
+        # Metoda 4: Szukamy w strukturze JSON w skrypcie konfiguracyjnym
+        if not product_id:
+            config_scripts = soup.find_all('script', type='text/x-magento-init')
+            for script in config_scripts:
+                try:
+                    json_data = json.loads(script.string)
+                    if '[data-role=priceBox]' in json_data:
+                        product_id = json_data['[data-role=priceBox]']['priceConfig']['productId']
+                        break
+                except:
+                    continue
+
+        if not product_id:
+            return {
+                'description': '',
+                'error': 'Nie można znaleźć ID produktu na stronie'
+            }
+
         # Konstrukcja GraphQL URL z parametrami
-        graphql_url = f"https://bookland.com.pl/graphql"
+        graphql_url = "https://bookland.com.pl/graphql"
         params = {
             'hash': '2079188462',
             'filter_1': f'{{"id":{{"eq":{product_id}}},"customer_group_id":{{"eq":"0"}}}}',
@@ -88,6 +128,11 @@ def get_bookland_data(url):
             'Content-Type': 'application/json',
             'Store': 'bookland'
         }
+        
+        # Debug info
+        st.write(f"Znalezione ID produktu: {product_id}")
+        st.write(f"URL GraphQL: {graphql_url}")
+        st.write(f"Parametry: {params}")
         
         response = requests.get(graphql_url, params=params, headers=headers, timeout=30)
         
