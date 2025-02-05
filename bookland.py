@@ -137,6 +137,7 @@ def generate_description(book_data):
     except Exception as e:
         st.error(f"Błąd generowania opisu: {str(e)}")
         return ""
+
 def main():
     if lubimyczytac_urls_input and bookland_urls_input:
         # Przygotowanie list URL-i
