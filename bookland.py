@@ -56,70 +56,32 @@ def get_lubimyczytac_data(url):
         }
 
 def get_bookland_data(url):
-    """Pobiera opis z Bookland przez GraphQL z wcześniejszą ekstrakcją ID"""
+    """Pobiera opis z Bookland przez GraphQL używając url_key"""
     try:
-        # Najpierw pobierz stronę produktu
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7'
-        }
+        # Wyciągnij url_key z URL
+        url_key = url.split('/')[-1]
+        if not url_key:
+            url_key = url.rstrip('/').split('/')[-1]
         
-        initial_response = requests.get(url, headers=headers, timeout=30)
-        soup = bs(initial_response.text, 'html.parser')
-        
-        # Szukamy ID produktu w różnych miejscach w HTML
-        product_id = None
-        
-        # Metoda 1: Szukamy w skrypcie JSON-LD
-        script_tag = soup.find('script', type='application/ld+json')
-        if script_tag:
-            import json
-            try:
-                json_data = json.loads(script_tag.string)
-                if isinstance(json_data, dict) and 'sku' in json_data:
-                    product_id = json_data.get('productID') or json_data.get('sku')
-            except:
-                pass
-
-        # Metoda 2: Szukamy w meta tagach
-        if not product_id:
-            meta_product = soup.find('meta', property='product:retailer_item_id')
-            if meta_product:
-                product_id = meta_product.get('content')
-
-        # Metoda 3: Szukamy w atrybutach data-
-        if not product_id:
-            product_elem = soup.find(attrs={'data-product-id': True})
-            if product_elem:
-                product_id = product_elem.get('data-product-id')
-                
-        # Metoda 4: Szukamy w strukturze JSON w skrypcie konfiguracyjnym
-        if not product_id:
-            config_scripts = soup.find_all('script', type='text/x-magento-init')
-            for script in config_scripts:
-                try:
-                    json_data = json.loads(script.string)
-                    if '[data-role=priceBox]' in json_data:
-                        product_id = json_data['[data-role=priceBox]']['priceConfig']['productId']
-                        break
-                except:
-                    continue
-
-        if not product_id:
-            return {
-                'description': '',
-                'error': 'Nie można znaleźć ID produktu na stronie'
-            }
-
-        # Konstrukcja GraphQL URL z parametrami
+        # Konstrukcja GraphQL URL
         graphql_url = "https://bookland.com.pl/graphql"
-        params = {
-            'hash': '2079188462',
-            'filter_1': f'{{"id":{{"eq":{product_id}}},"customer_group_id":{{"eq":"0"}}}}',
-            'pageSize_1': '20',
-            'currentPage_1': '1',
-            '_currency': '""'
+        
+        # Przygotuj query GraphQL
+        query = {
+            "query": """
+            query GetProductByUrlKey($urlKey: String!) {
+              products(filter: { url_key: { eq: $urlKey } }) {
+                items {
+                  description {
+                    html
+                  }
+                }
+              }
+            }
+            """,
+            "variables": {
+                "urlKey": url_key
+            }
         }
         
         headers = {
@@ -130,14 +92,18 @@ def get_bookland_data(url):
         }
         
         # Debug info
-        st.write(f"Znalezione ID produktu: {product_id}")
-        st.write(f"URL GraphQL: {graphql_url}")
-        st.write(f"Parametry: {params}")
+        st.write(f"URL key produktu: {url_key}")
+        st.write("Query GraphQL:", query)
         
-        response = requests.get(graphql_url, params=params, headers=headers, timeout=30)
+        response = requests.post(graphql_url, json=query, headers=headers, timeout=30)
+        
+        # Debug info
+        st.write(f"Status odpowiedzi: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
+            st.write("Odpowiedź GraphQL:", data)
+            
             if 'data' in data and 'products' in data['data'] and 'items' in data['data']['products']:
                 items = data['data']['products']['items']
                 if items and 'description' in items[0]:
@@ -149,7 +115,7 @@ def get_bookland_data(url):
         
         return {
             'description': '',
-            'error': f"Nie znaleziono opisu w odpowiedzi GraphQL"
+            'error': f"Nie znaleziono opisu w odpowiedzi GraphQL (status: {response.status_code})"
         }
             
     except Exception as e:
@@ -157,7 +123,6 @@ def get_bookland_data(url):
             'description': '',
             'error': f"Błąd pobierania z Bookland GraphQL: {str(e)}"
         }
-
 def generate_description(book_data):
     """Generuje nowy opis przy użyciu OpenAI"""
     try:
