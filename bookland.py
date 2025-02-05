@@ -58,67 +58,56 @@ def get_lubimyczytac_data(url):
 def get_bookland_data(url):
     """Pobiera opis z Bookland przez GraphQL"""
     try:
-        # Wyciągnij URL key produktu
-        product_url_key = url.split('/')[-1]
+        # Wyciągnij ID produktu z URL
+        product_id = url.split('/')[-1]
+        if not product_id.isdigit():
+            # Jeśli ostatni segment URL nie jest ID, próbujemy znaleźć ID w całym URL
+            import re
+            id_match = re.search(r'/(\d+)(?:[^/]*)?$', url)
+            if id_match:
+                product_id = id_match.group(1)
+            else:
+                return {
+                    'description': '',
+                    'error': 'Nie można znaleźć ID produktu w URL'
+                }
+        
+        # Konstrukcja GraphQL URL z parametrami
+        graphql_url = f"https://bookland.com.pl/graphql"
+        params = {
+            'hash': '2079188462',
+            'filter_1': f'{{"id":{{"eq":{product_id}}},"customer_group_id":{{"eq":"0"}}}}',
+            'pageSize_1': '20',
+            'currentPage_1': '1',
+            '_currency': '""'
+        }
         
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json',
             'Content-Type': 'application/json',
-            'Store': 'bookland',
-            'Accept': 'application/json'
+            'Store': 'bookland'
         }
         
-        # GraphQL query
-        query = {
-            "query": """
-            query GetProductByUrlKey($urlKey: String!) {
-                products(filter: { url_key: { eq: $urlKey } }) {
-                    items {
-                        description {
-                            html
-                        }
-                    }
-                }
-            }
-            """,
-            "variables": {
-                "urlKey": product_url_key
-            }
-        }
-        
-        # Debug info
-        st.write("Próba pobrania danych przez GraphQL")
-        
-        response = requests.post(
-            'https://bookland.com.pl/graphql',
-            headers=headers,
-            json=query,
-            timeout=30
-        )
-        
-        # Debug info
-        st.write(f"Status odpowiedzi GraphQL: {response.status_code}")
-        st.write("Nagłówki odpowiedzi:", response.headers)
+        response = requests.get(graphql_url, params=params, headers=headers, timeout=30)
         
         if response.status_code == 200:
             data = response.json()
-            st.write("Struktura odpowiedzi GraphQL:", data)
-            
-            # Próba znalezienia opisu w odpowiedzi GraphQL
-            description = data.get('data', {}).get('products', {}).get('items', [{}])[0].get('description', {}).get('html', '')
-            return {
-                'description': description,
-                'error': None
-            }
-        else:
-            st.write("Surowa odpowiedź:", response.text[:500])
-            return {
-                'description': '',
-                'error': f"Błąd GraphQL: {response.status_code}"
-            }
+            if 'data' in data and 'products' in data['data'] and 'items' in data['data']['products']:
+                items = data['data']['products']['items']
+                if items and 'description' in items[0]:
+                    description = items[0]['description']['html']
+                    return {
+                        'description': description,
+                        'error': None
+                    }
+        
+        return {
+            'description': '',
+            'error': f"Nie znaleziono opisu w odpowiedzi GraphQL"
+        }
             
     except Exception as e:
-        st.error(f"Szczegółowy błąd GraphQL: {str(e)}")
         return {
             'description': '',
             'error': f"Błąd pobierania z Bookland GraphQL: {str(e)}"
