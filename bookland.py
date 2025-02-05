@@ -1,8 +1,10 @@
 import streamlit as st
-import streamlit.components.v1 as components
-from bs4 import BeautifulSoup as bs
+import pandas as pd
 from openai import OpenAI
+import requests
+from bs4 import BeautifulSoup as bs
 import time
+import streamlit.components.v1 as components
 
 # Inicjalizacja Streamlit UI
 st.title('Generator Opisów Książek')
