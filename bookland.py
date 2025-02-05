@@ -4,9 +4,6 @@ from openai import OpenAI
 import requests
 from bs4 import BeautifulSoup as bs
 import time
-from requests_html import AsyncHTMLSession
-import asyncio
-import nest_asyncio
 
 # Inicjalizacja Streamlit UI
 st.title('Generator Opisów Książek')
@@ -59,7 +56,7 @@ def get_lubimyczytac_data(url):
         }
 
 def get_bookland_data(url):
-    """Pobiera opis z Bookland używając requests"""
+    """Pobiera opis z Bookland"""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
