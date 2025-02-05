@@ -1,7 +1,5 @@
 import streamlit as st
-import pandas as pd
-from openai import OpenAI
-import requests
+import streamlit.components.v1 as components
 from bs4 import BeautifulSoup as bs
 import time
 
@@ -56,105 +54,39 @@ def get_lubimyczytac_data(url):
         }
 
 def get_bookland_data(url):
-    """Pobiera opis z Bookland przez uproszczone zapytanie GraphQL"""
+    """Pobiera opis z Bookland używając komponentu React"""
     try:
-        # Wyciągnij url_key z URL
-        url_key = url.split('/')[-1]
-        if not url_key:
-            url_key = url.rstrip('/').split('/')[-1]
+        # Wyświetl komponent React do scrapowania
+        description_container = st.empty()
+        description_container.markdown("Ładowanie opisu z Bookland...")
         
-        # Konstrukcja GraphQL URL
-        graphql_url = "https://bookland.com.pl/graphql"
-        
-        # Prostsze zapytanie GraphQL
-        query = """
-        {
-            products(
-                filter: {
-                    url_key: {
-                        eq: "%s"
-                    }
-                }
-            ) {
-                items {
-                    sku
-                    description {
-                        html
-                    }
-                }
-            }
-        }
-        """ % url_key
-        
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'Store': 'bookland'
-        }
-        
-        # Debug info
-        st.write(f"URL key produktu: {url_key}")
-        st.write("Query GraphQL:", query)
-        
-        response = requests.post(
-            graphql_url, 
-            json={"query": query},
-            headers=headers,
-            timeout=30
+        # Tutaj użyjemy komponentu React
+        components.html(
+            f"""
+            <div id="bookland-scraper"></div>
+            <script>
+                window.addEventListener('message', function(e) {{
+                    if (e.data.type === 'description_found') {{
+                        window.parent.postMessage({{
+                            type: 'streamlit:setComponentValue',
+                            value: e.data.description
+                        }}, '*');
+                    }}
+                }});
+            </script>
+            """,
+            height=100,
+            key=f"scraper_{url}"
         )
         
-        # Debug info
-        st.write(f"Status odpowiedzi: {response.status_code}")
-        if response.status_code != 200:
-            st.write("Błąd odpowiedzi:", response.text)
-        
-        if response.status_code == 200:
-            data = response.json()
-            st.write("Odpowiedź GraphQL:", data)
-            
-            if ('data' in data and 'products' in data['data'] and 
-                'items' in data['data']['products'] and data['data']['products']['items']):
-                description = data['data']['products']['items'][0]['description']['html']
-                return {
-                    'description': description,
-                    'error': None
-                }
-        
-        # Jeśli GraphQL nie zadziałał, spróbuj pobrać bezpośrednio z HTML
-        st.write("Próba pobrania opisu bezpośrednio ze strony produktu...")
-        product_response = requests.get(url, headers=headers)
-        
-        soup = bs(product_response.text, 'html.parser')
-        
-        # Próba znalezienia opisu w różnych miejscach
-        description_elem = None
-        possible_selectors = [
-            'div.ProductInformation-Description',
-            'div[data-testid="product-description"]',
-            'div.product-desc',
-            'div.description',
-            'div#description',
-            'div[itemprop="description"]'
-        ]
-        
-        for selector in possible_selectors:
-            description_elem = soup.select_one(selector)
-            if description_elem:
-                st.write(f"Znaleziono opis używając selektora: {selector}")
-                break
-        
-        if description_elem:
-            return {
-                'description': description_elem.get_text(strip=True),
-                'error': None
-            }
+        # Poczekaj na odpowiedź
+        time.sleep(5)  # Daj czas na załadowanie
         
         return {
-            'description': '',
-            'error': f"Nie udało się znaleźć opisu produktu"
+            'description': "Opis zostanie pobrany przez przeglądarkę",
+            'error': None
         }
-            
+        
     except Exception as e:
         return {
             'description': '',
