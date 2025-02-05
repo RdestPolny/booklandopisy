@@ -6,6 +6,26 @@ from bs4 import BeautifulSoup as bs
 import time
 import streamlit.components.v1 as components
 
+if 'bookland_description' not in st.session_state:
+    st.session_state.bookland_description = ''
+
+# Dodaj obsługę komunikatów z iframe
+components.html(
+    """
+    <script>
+    window.addEventListener('message', function(event) {
+        if (event.data.type === 'bookland_description') {
+            window.parent.postMessage({
+                type: 'streamlit:setComponentValue',
+                value: event.data.description
+            }, '*');
+        }
+    });
+    </script>
+    """,
+    height=0
+)
+
 # Inicjalizacja Streamlit UI
 st.title('Generator Opisów Książek')
 
