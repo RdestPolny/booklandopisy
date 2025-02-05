@@ -59,24 +59,31 @@ def get_lubimyczytac_data(url):
         }
 
 def get_bookland_data(url):
-    """Pobiera opis z Bookland używając requests-html"""
+    """Pobiera opis z Bookland używając requests"""
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Cache-Control': 'max-age=0'
+    }
+    
     try:
-        session = AsyncHTMLSession()
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
         
-        async def get_content():
-            r = await session.get(url)
-            await r.html.arender(timeout=30)
-            
-            description_elem = r.html.find('.ProductInformation-Description', first=True)
-            description = description_elem.text if description_elem else ''
-            
-            return {
-                'description': description,
-                'error': None
-            }
-            
-        nest_asyncio.apply()
-        return asyncio.run(get_content())
+        soup = bs(response.text, 'html.parser')
+        
+        # Znajdź element z opisem
+        description_elem = soup.find('div', class_='ProductInformation-Description')
+        description = description_elem.get_text(strip=True) if description_elem else ''
+        
+        return {
+            'description': description,
+            'error': None
+        }
         
     except Exception as e:
         return {
