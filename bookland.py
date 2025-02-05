@@ -56,7 +56,7 @@ def get_lubimyczytac_data(url):
         }
 
 def get_bookland_data(url):
-    """Pobiera opis z Bookland przez GraphQL używając url_key"""
+    """Pobiera opis z Bookland przez uproszczone zapytanie GraphQL"""
     try:
         # Wyciągnij url_key z URL
         url_key = url.split('/')[-1]
@@ -66,23 +66,25 @@ def get_bookland_data(url):
         # Konstrukcja GraphQL URL
         graphql_url = "https://bookland.com.pl/graphql"
         
-        # Przygotuj query GraphQL
-        query = {
-            "query": """
-            query GetProductByUrlKey($urlKey: String!) {
-              products(filter: { url_key: { eq: $urlKey } }) {
-                items {
-                  description {
-                    html
-                  }
+        # Prostsze zapytanie GraphQL
+        query = """
+        {
+            products(
+                filter: {
+                    url_key: {
+                        eq: "%s"
+                    }
                 }
-              }
-            }
-            """,
-            "variables": {
-                "urlKey": url_key
+            ) {
+                items {
+                    sku
+                    description {
+                        html
+                    }
+                }
             }
         }
+        """ % url_key
         
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -95,33 +97,68 @@ def get_bookland_data(url):
         st.write(f"URL key produktu: {url_key}")
         st.write("Query GraphQL:", query)
         
-        response = requests.post(graphql_url, json=query, headers=headers, timeout=30)
+        response = requests.post(
+            graphql_url, 
+            json={"query": query},
+            headers=headers,
+            timeout=30
+        )
         
         # Debug info
         st.write(f"Status odpowiedzi: {response.status_code}")
+        if response.status_code != 200:
+            st.write("Błąd odpowiedzi:", response.text)
         
         if response.status_code == 200:
             data = response.json()
             st.write("Odpowiedź GraphQL:", data)
             
-            if 'data' in data and 'products' in data['data'] and 'items' in data['data']['products']:
-                items = data['data']['products']['items']
-                if items and 'description' in items[0]:
-                    description = items[0]['description']['html']
-                    return {
-                        'description': description,
-                        'error': None
-                    }
+            if ('data' in data and 'products' in data['data'] and 
+                'items' in data['data']['products'] and data['data']['products']['items']):
+                description = data['data']['products']['items'][0]['description']['html']
+                return {
+                    'description': description,
+                    'error': None
+                }
+        
+        # Jeśli GraphQL nie zadziałał, spróbuj pobrać bezpośrednio z HTML
+        st.write("Próba pobrania opisu bezpośrednio ze strony produktu...")
+        product_response = requests.get(url, headers=headers)
+        
+        soup = bs(product_response.text, 'html.parser')
+        
+        # Próba znalezienia opisu w różnych miejscach
+        description_elem = None
+        possible_selectors = [
+            'div.ProductInformation-Description',
+            'div[data-testid="product-description"]',
+            'div.product-desc',
+            'div.description',
+            'div#description',
+            'div[itemprop="description"]'
+        ]
+        
+        for selector in possible_selectors:
+            description_elem = soup.select_one(selector)
+            if description_elem:
+                st.write(f"Znaleziono opis używając selektora: {selector}")
+                break
+        
+        if description_elem:
+            return {
+                'description': description_elem.get_text(strip=True),
+                'error': None
+            }
         
         return {
             'description': '',
-            'error': f"Nie znaleziono opisu w odpowiedzi GraphQL (status: {response.status_code})"
+            'error': f"Nie udało się znaleźć opisu produktu"
         }
             
     except Exception as e:
         return {
             'description': '',
-            'error': f"Błąd pobierania z Bookland GraphQL: {str(e)}"
+            'error': f"Błąd pobierania z Bookland: {str(e)}"
         }
 def generate_description(book_data):
     """Generuje nowy opis przy użyciu OpenAI"""
