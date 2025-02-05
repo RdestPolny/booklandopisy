@@ -71,11 +71,33 @@ def get_bookland_data(url):
         response = requests.get(url, headers=headers, timeout=30)
         response.raise_for_status()
         
+        # Debug: Sprawdź status odpowiedzi
+        st.write(f"Status odpowiedzi Bookland: {response.status_code}")
+        
         soup = bs(response.text, 'html.parser')
         
-        # Znajdź element z opisem
+        # Debug: Sprawdź wszystkie elementy z klasą zawierającą "Description"
+        description_elements = soup.find_all(class_=lambda x: x and 'Description' in x)
+        st.write(f"Znalezione elementy z 'Description': {len(description_elements)}")
+        for elem in description_elements:
+            st.write(f"Klasa elementu: {elem.get('class')}")
+        
+        # Spróbuj znaleźć element z opisem
         description_elem = soup.find('div', class_='ProductInformation-Description')
-        description = description_elem.get_text(strip=True) if description_elem else ''
+        
+        # Debug: Sprawdź czy element został znaleziony
+        st.write(f"Czy znaleziono element opisu: {description_elem is not None}")
+        
+        if description_elem:
+            description = description_elem.get_text(strip=True)
+            # Debug: Pokaż pierwsze 100 znaków opisu
+            st.write(f"Początek opisu: {description[:100] if description else 'BRAK TEKSTU'}")
+        else:
+            description = ''
+            
+            # Debug: Pokaż fragment HTML
+            st.write("Fragment HTML strony:")
+            st.code(soup.prettify()[:500])
         
         return {
             'description': description,
@@ -83,6 +105,7 @@ def get_bookland_data(url):
         }
         
     except Exception as e:
+        st.error(f"Szczegółowy błąd: {str(e)}")
         return {
             'description': '',
             'error': f"Błąd pobierania z Bookland: {str(e)}"
@@ -130,7 +153,7 @@ def generate_description(book_data):
         ]
         
         response = client.chat.completions.create(
-            model="gpt-4-mini",
+            model="gpt-4o-mini",
             messages=messages,
             temperature=0.7,
             max_tokens=2000
