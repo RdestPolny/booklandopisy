@@ -56,64 +56,72 @@ def get_lubimyczytac_data(url):
         }
 
 def get_bookland_data(url):
-    """Pobiera opis z Bookland"""
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7',
-        # Usuńmy Accept-Encoding, żeby requests sam obsłużył kompresję
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-    }
-    
+    """Pobiera opis z Bookland przez GraphQL"""
     try:
-        # Dodajmy verify=False jeśli występują problemy z certyfikatem
-        response = requests.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
+        # Wyciągnij URL key produktu
+        product_url_key = url.split('/')[-1]
         
-        # Debug: Sprawdź nagłówki odpowiedzi
-        st.write("Nagłówki odpowiedzi:", response.headers)
-        
-        # Upewnij się, że mamy właściwe kodowanie
-        response.encoding = response.apparent_encoding
-        
-        soup = bs(response.text, 'html.parser')
-        
-        # Spróbujmy znaleźć element opisu różnymi metodami
-        description_elem = None
-        
-        # Metoda 1: bezpośrednie wyszukanie po klasie
-        description_elem = soup.find('div', class_='ProductInformation-Description')
-        
-        # Metoda 2: wyszukanie po fragmencie klasy
-        if not description_elem:
-            description_elem = soup.find(class_=lambda x: x and 'Description' in x)
-        
-        # Metoda 3: wyszukanie po atrybutach data-
-        if not description_elem:
-            description_elem = soup.find('div', attrs={'data-testid': 'product-description'})
-        
-        # Debug: Pokaż znalezione elementy
-        st.write("Znaleziono element opisu:", bool(description_elem))
-        if description_elem:
-            st.write("Klasy znalezionego elementu:", description_elem.get('class'))
-        
-        # Debug: Pokaż fragment przetworzonego HTML
-        st.write("Fragment przetworzonego HTML:")
-        st.code(soup.prettify()[:1000])
-        
-        description = description_elem.get_text(strip=True) if description_elem else ''
-        
-        return {
-            'description': description,
-            'error': None
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Content-Type': 'application/json',
+            'Store': 'bookland',
+            'Accept': 'application/json'
         }
         
+        # GraphQL query
+        query = {
+            "query": """
+            query GetProductByUrlKey($urlKey: String!) {
+                products(filter: { url_key: { eq: $urlKey } }) {
+                    items {
+                        description {
+                            html
+                        }
+                    }
+                }
+            }
+            """,
+            "variables": {
+                "urlKey": product_url_key
+            }
+        }
+        
+        # Debug info
+        st.write("Próba pobrania danych przez GraphQL")
+        
+        response = requests.post(
+            'https://bookland.com.pl/graphql',
+            headers=headers,
+            json=query,
+            timeout=30
+        )
+        
+        # Debug info
+        st.write(f"Status odpowiedzi GraphQL: {response.status_code}")
+        st.write("Nagłówki odpowiedzi:", response.headers)
+        
+        if response.status_code == 200:
+            data = response.json()
+            st.write("Struktura odpowiedzi GraphQL:", data)
+            
+            # Próba znalezienia opisu w odpowiedzi GraphQL
+            description = data.get('data', {}).get('products', {}).get('items', [{}])[0].get('description', {}).get('html', '')
+            return {
+                'description': description,
+                'error': None
+            }
+        else:
+            st.write("Surowa odpowiedź:", response.text[:500])
+            return {
+                'description': '',
+                'error': f"Błąd GraphQL: {response.status_code}"
+            }
+            
     except Exception as e:
-        st.error(f"Szczegółowy błąd: {str(e)}")
+        st.error(f"Szczegółowy błąd GraphQL: {str(e)}")
         return {
             'description': '',
-            'error': f"Błąd pobierania z Bookland: {str(e)}"
+            'error': f"Błąd pobierania z Bookland GraphQL: {str(e)}"
         }
 
 def generate_description(book_data):
