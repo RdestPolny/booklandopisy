@@ -61,43 +61,48 @@ def get_bookland_data(url):
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Accept-Encoding': 'gzip, deflate, br',
+        # Usuńmy Accept-Encoding, żeby requests sam obsłużył kompresję
         'Connection': 'keep-alive',
         'Upgrade-Insecure-Requests': '1',
-        'Cache-Control': 'max-age=0'
     }
     
     try:
+        # Dodajmy verify=False jeśli występują problemy z certyfikatem
         response = requests.get(url, headers=headers, timeout=30)
         response.raise_for_status()
         
-        # Debug: Sprawdź status odpowiedzi
-        st.write(f"Status odpowiedzi Bookland: {response.status_code}")
+        # Debug: Sprawdź nagłówki odpowiedzi
+        st.write("Nagłówki odpowiedzi:", response.headers)
+        
+        # Upewnij się, że mamy właściwe kodowanie
+        response.encoding = response.apparent_encoding
         
         soup = bs(response.text, 'html.parser')
         
-        # Debug: Sprawdź wszystkie elementy z klasą zawierającą "Description"
-        description_elements = soup.find_all(class_=lambda x: x and 'Description' in x)
-        st.write(f"Znalezione elementy z 'Description': {len(description_elements)}")
-        for elem in description_elements:
-            st.write(f"Klasa elementu: {elem.get('class')}")
+        # Spróbujmy znaleźć element opisu różnymi metodami
+        description_elem = None
         
-        # Spróbuj znaleźć element z opisem
+        # Metoda 1: bezpośrednie wyszukanie po klasie
         description_elem = soup.find('div', class_='ProductInformation-Description')
         
-        # Debug: Sprawdź czy element został znaleziony
-        st.write(f"Czy znaleziono element opisu: {description_elem is not None}")
+        # Metoda 2: wyszukanie po fragmencie klasy
+        if not description_elem:
+            description_elem = soup.find(class_=lambda x: x and 'Description' in x)
         
+        # Metoda 3: wyszukanie po atrybutach data-
+        if not description_elem:
+            description_elem = soup.find('div', attrs={'data-testid': 'product-description'})
+        
+        # Debug: Pokaż znalezione elementy
+        st.write("Znaleziono element opisu:", bool(description_elem))
         if description_elem:
-            description = description_elem.get_text(strip=True)
-            # Debug: Pokaż pierwsze 100 znaków opisu
-            st.write(f"Początek opisu: {description[:100] if description else 'BRAK TEKSTU'}")
-        else:
-            description = ''
-            
-            # Debug: Pokaż fragment HTML
-            st.write("Fragment HTML strony:")
-            st.code(soup.prettify()[:500])
+            st.write("Klasy znalezionego elementu:", description_elem.get('class'))
+        
+        # Debug: Pokaż fragment przetworzonego HTML
+        st.write("Fragment przetworzonego HTML:")
+        st.code(soup.prettify()[:1000])
+        
+        description = description_elem.get_text(strip=True) if description_elem else ''
         
         return {
             'description': description,
