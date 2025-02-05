@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup as bs
 import time
 import streamlit.components.v1 as components
 
+# Inicjalizacja session state
 if 'bookland_description' not in st.session_state:
     st.session_state.bookland_description = ''
 
@@ -79,40 +80,79 @@ def get_lubimyczytac_data(url):
 def get_bookland_data(url):
     """Pobiera opis z Bookland"""
     try:
-        # Wyświetl komponent React do scrapowania
-        description_container = st.empty()
-        description_container.markdown("Ładowanie opisu z Bookland...")
-        
-        # Uproszczony iframe do załadowania strony
+        # Przygotuj komponent HTML z iframe i obsługą komunikacji
         html_content = f"""
+            <script>
+            let descriptionFound = false;
+            
+            // Funkcja sprawdzająca opis co sekundę
+            function checkForDescription() {{
+                if (descriptionFound) return;
+                
+                try {{
+                    const iframe = document.querySelector('iframe');
+                    const desc = iframe.contentDocument.querySelector('.ProductInformation-Description');
+                    if (desc) {{
+                        descriptionFound = true;
+                        const description = desc.innerText || desc.textContent;
+                        
+                        // Wysyłamy opis do aplikacji Streamlit
+                        window.parent.postMessage({{
+                            type: 'bookland_description',
+                            description: description
+                        }}, '*');
+                        
+                        document.getElementById('status').innerText = 'Znaleziono opis!';
+                        document.getElementById('description-output').innerText = description;
+                    }}
+                }} catch(e) {{
+                    console.log('Waiting for content...', e);
+                }}
+            }}
+            
+            window.addEventListener('load', () => {{
+                const checkInterval = setInterval(() => {{
+                    checkForDescription();
+                    if (descriptionFound) clearInterval(checkInterval);
+                }}, 1000);
+                
+                // Przerwij po 15 sekundach jeśli nie znaleziono opisu
+                setTimeout(() => {{
+                    clearInterval(checkInterval);
+                    if (!descriptionFound) {{
+                        document.getElementById('status').innerText = 'Nie udało się pobrać opisu.';
+                    }}
+                }}, 15000);
+            }});
+            </script>
+            
             <div id="scraper-container">
+                <div id="status" style="font-size: 12px; color: #666;">Ładowanie strony...</div>
                 <iframe src="{url}" 
-                        style="width:1px;height:1px;opacity:0;position:absolute;top:-9999px;left:-9999px"
-                        onload="
-                            setTimeout(() => {{
-                                try {{
-                                    const desc = document.querySelector('iframe').contentDocument.querySelector('.ProductInformation-Description');
-                                    if (desc) {{
-                                        document.getElementById('description-output').innerText = desc.innerText;
-                                    }}
-                                }} catch(e) {{
-                                    console.error('Błąd:', e);
-                                }}
-                            }}, 5000);
-                        "
+                    style="width:1px;height:1px;opacity:0;position:absolute;top:-9999px;left:-9999px"
                 ></iframe>
-                <div id="description-output"></div>
+                <div id="description-output" style="display:none;"></div>
             </div>
         """
         
-        # Wyświetl iframe
-        components.html(html_content, height=100)
+        # Utwórz kontener na opis
+        description_container = st.empty()
         
-        time.sleep(7)  # Daj więcej czasu na załadowanie
+        # Wyświetl komponent HTML i nasłuchuj na wiadomości
+        components.html(
+            html_content,
+            height=50
+        )
+        
+        # Poczekaj na pobranie opisu
+        time.sleep(16)  # Czekamy trochę dłużej niż timeout w JavaScript
+        
+        # Pobierz opis z session state
+        description = st.session_state.get('bookland_description', '')
         
         return {
-            'description': 'Opis powinien zostać pobrany asynchronicznie. Sprawdź wynik w polu "description-output".',
-            'error': None
+            'description': description if description else 'Nie udało się pobrać opisu',
+            'error': None if description else 'Timeout podczas pobierania opisu'
         }
         
     except Exception as e:
@@ -120,6 +160,7 @@ def get_bookland_data(url):
             'description': '',
             'error': f"Błąd pobierania z Bookland: {str(e)}"
         }
+
 def generate_description(book_data):
     """Generuje nowy opis przy użyciu OpenAI"""
     try:
@@ -162,7 +203,7 @@ def generate_description(book_data):
         ]
         
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4-mini",
             messages=messages,
             temperature=0.7,
             max_tokens=2000
