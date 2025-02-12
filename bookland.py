@@ -79,27 +79,50 @@ default_prompt_taniaksiazka = """Jako autor opisów w księgarni internetowej Bo
 <h3>CTA</h3>
 ```
 """
+default_prompt_gry_planszowe = """Jako autor opisów w księgarni internetowej Bookland, twoim zdaniem jest przygotowanie rzetelnego, zoptymalizowanego opisu produktu o tytule "{taniaksiazka_title}". Oto informacje, na których powinieneś bazować: {taniaksiazka_details} {taniaksiazka_description}. Stwórz angażujący opis w HTML z wykorzystaniem:<h2>, <p>, <b>, <ul>, <li>. Opis powinien:
+
+    Zaczyna się od nagłówka <h2> z kreatywnym hasłem, które oddaje emocje i charakter gry planszowej oraz wskazuje na grupę docelową, np. dla miłośników strategii i rozgrywek rodzinnych.
+    Zawiera sekcje:
+        <p>Wprowadzenie, które przedstawia grę, jej tematykę, mechanikę oraz główne cechy, takie jak czas rozgrywki i poziom trudności.</p>
+        <p>Szczegółowy opis rozgrywki z <b>wyróżnionymi</b> słowami kluczowymi, podkreślającymi unikalne elementy, takie jak interakcja, strategia i rywalizacja.</p>
+        <p>Korzyści dla graczy, np. rozwój umiejętności logicznego myślenia, budowanie relacji rodzinnych oraz doskonała zabawa.</p>
+        <p>Podsumowanie, które zachęca do zakupu i podkreśla, dlaczego ta gra planszowa jest wyjątkowa.</p>
+        <h3>Przekonujący call to action</h3>
+    Wykorzystuje pobrane informacje, aby:
+        Podkreślić najważniejsze cechy gry planszowej
+        Wzmocnić wiarygodność opisu poprzez konkretne przykłady
+    Formatowanie:
+        Używaj tagów HTML: <h2>, <p>, <b>, <h3>
+        Wyróżniaj kluczowe frazy za pomocą <b>
+        Nie używaj znaczników Markdown, tylko HTML
+        Nie dodawaj komentarzy ani wyjaśnień, tylko sam opis
+    Styl:
+        Opis ma być angażujący, ale profesjonalny
+        Używaj słownictwa dostosowanego do miłośników gier planszowych
+        Unikaj powtórzeń
+        Zachowaj spójność tonu
+    Przykład formatu:
+
+<h2>Niezapomniana rozgrywka w świecie strategii!</h2>
+<p>Gra "Tytuł Gry" to połączenie pasjonującej strategii, emocjonującej rywalizacji oraz doskonałej zabawy, która zjednoczy całą rodzinę. Dzięki unikalnej mechanice, każda rozgrywka dostarcza niezapomnianych wrażeń.</p>
+<p>Podczas gry gracze muszą podejmować strategiczne decyzje, rozwijać umiejętności planowania i współpracy, co sprawia, że każda partia jest inna i pełna emocji.</p>
+<p>Dzięki tej grze rozwijasz swoje umiejętności logicznego myślenia oraz budujesz silne relacje rodzinne, czerpiąc radość z każdej wspólnej rozgrywki.</p>
+<h3>Nie zwlekaj! Dołącz do grona zwycięzców i odkryj magię gry już dziś!</h3>
+```"""
 
 # ------------------------#
 # Sidebar – wybór promptu
 # ------------------------#
 
-selected_prompt = st.sidebar.selectbox("Wybierz prompt", ["LC - książki", "TK - Podręczniki"])
+selected_prompt = st.sidebar.selectbox("Wybierz prompt", ["LC - książki", "TK - Podręczniki", "TK - gry planszowe"])
 
 if selected_prompt == "LC - książki":
-    st.sidebar.markdown(
-        "**Legenda dla LC - książki:**  \n"
-        "- `{lubimy_title}`: Tytuł książki  \n"
-        "- `{lubimy_description}`: Opis książki  \n"
-        "- `{lubimy_reviews}`: Opinie czytelników"
-    )
+    st.sidebar.markdown("**Opis:** Prompt przeznaczony do tworzenia angażujących opisów książek, oparty na danych z Lubimy Czytać.")
 elif selected_prompt == "TK - Podręczniki":
-    st.sidebar.markdown(
-        "**Legenda dla TK - Podręczniki:**  \n"
-        "- `{taniaksiazka_title}`: Tytuł książki  \n"
-        "- `{taniaksiazka_details}`: Szczegóły produktu  \n"
-        "- `{taniaksiazka_description}`: Opis produktu"
-    )
+    st.sidebar.markdown("**Opis:** Prompt do opisu podręczników szkolnych, który uwzględnia specyfikę treści edukacyjnych.")
+elif selected_prompt == "TK - gry planszowe":
+    st.sidebar.markdown("**Opis:** Prompt do opisu gier planszowych, skupiający się na mechanice, emocjach i unikalnych cechach rozgrywki.")
+
 
 # ------------------------#
 # Główna część aplikacji
@@ -172,7 +195,7 @@ def get_taniaksiazka_data(url):
         response.raise_for_status()
         soup = bs(response.text, 'html.parser')
         
-        # Pobieramy tytuł książki z <h1>
+        # Pobieramy tytuł z <h1>
         title_tag = soup.find('h1')
         title = title_tag.get_text(strip=True) if title_tag else ''
         
@@ -307,16 +330,20 @@ if submit_button:
                     'Opinie': book_data.get('reviews', ''),
                     'Nowy opis': new_description
                 })
-            # Dla taniaksiazka.pl – oczekiwany prompt to "TK - Podręczniki"
+            # Dla taniaksiazka.pl – oczekiwany prompt to "TK - Podręczniki" lub "TK - gry planszowe"
             elif "taniaksiazka.pl" in url_lower:
-                if selected_prompt != "TK - Podręczniki":
+                if selected_prompt not in ["TK - Podręczniki", "TK - gry planszowe"]:
                     st.error(f"Wybrano prompt '{selected_prompt}', ale URL '{url}' pochodzi z taniaksiazka.pl. Pomijam ten URL.")
                     continue
                 book_data = get_taniaksiazka_data(url)
                 if book_data.get('error'):
                     st.error(f"Błąd dla {url}: {book_data['error']}")
                     continue
-                new_description = generate_description_taniaksiazka(book_data, default_prompt_taniaksiazka)
+                if selected_prompt == "TK - Podręczniki":
+                    prompt_used = default_prompt_taniaksiazka
+                else:  # "TK - gry planszowe"
+                    prompt_used = default_prompt_gry_planszowe
+                new_description = generate_description_taniaksiazka(book_data, prompt_used)
                 results.append({
                     'URL': url,
                     'Tytuł': book_data.get('title', ''),
