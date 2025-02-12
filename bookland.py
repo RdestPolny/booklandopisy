@@ -9,18 +9,45 @@ from openai import OpenAI
 # Domyślne prompt'y z unikalnymi zmiennymi
 # ------------------------#
 
-default_prompt_lubimyczytac = """Na podstawie poniższych danych stwórz zoptymalizowany pod SEO opis książki w HTML.
+default_prompt_lubimyczytac = """Stwórz optymalizowany pod SEO opis książki w HTML. Opis powinien:
+
 Dane:
+Tytuł książki: {lubimy_title}
 Opis książki: {lubimy_description}
 Opinie czytelników: {lubimy_reviews}
 
 Opis powinien zawierać:
-- Nagłówek <h2> z kreatywnym hasłem.
-- Kilka akapitów <p> z kluczowymi informacjami.
-- Przekonujący call to action w formie <h3>.
-
-Używaj wyłącznie tagów HTML (nie Markdown) i nie dodawaj dodatkowych komentarzy.
-"""
+1. Zaczyna się od mocnego nagłówka <h2> z kreatywnym hasłem nawiązującym do treści książki.
+2. Zawiera sekcje:
+   - <p>Wprowadzenie z głównymi zaletami książki</p>
+   - <p>Szczegółowy opis fabuły/treści z <b>wyróżnionymi</b> słowami kluczowymi</p>
+   - <p>Wartości i korzyści dla czytelnika</p>
+   - <p>Podsumowanie opinii czytelników z konkretnymi przykładami</p>
+   - <h3>Przekonujący call to action</h3>
+3. Wykorzystuje opinie czytelników, aby:
+   - Podkreślić najczęściej wymieniane zalety książki
+   - Wzmocnić wiarygodność opisu
+   - Dodać emocje i autentyczność
+4. Formatowanie:
+   - Używaj tagów HTML: <h2>, <p>, <b>, <h3>
+   - Wyróżniaj kluczowe frazy za pomocą <b>
+   - Nie używaj znaczników Markdown, tylko HTML
+   - Nie dodawaj komentarzy ani wyjaśnień, tylko sam opis
+5. Styl:
+   - Opis ma być angażujący, ale profesjonalny
+   - Używaj słownictwa dostosowanego do gatunku książki
+   - Unikaj powtórzeń
+   - Zachowaj spójność tonu
+6. Przykład formatu:
+```html
+<h2>Przygoda na świeżym powietrzu z tatą Oli czeka na każdą rodzinę!</h2>
+<p>„Tata Oli. Tom 3. Z tatą Oli na biwaku” to <b>pełna humoru</b> i <b>przygód</b> opowieść, która z pewnością zachwyci najmłodszych czytelników oraz ich rodziców. Ta książka łączy w sobie <b>fantastyczne ilustracje</b> z doskonałym tekstem, który bawi do łez, a jednocześnie skłania do refleksji nad <b>relacjami rodzinnymi</b>.</p>
+<p>W tej części tata Oli postanawia <b>oderwać dzieci</b> od ekranów i zorganizować im prawdziwy <b>biwak</b>. Wspólnie stają przed nie lada wyzwaniem: muszą <b>rozpalić ognisko</b>, <b>łowić ryby</b> i cieszyć się <b>urokami natury</b>. Jednak zamiast sielanki, napotykają na wiele zabawnych przeszkód, co prowadzi do sytuacji pełnych <b>śmiechu</b> i <b>niespodzianek</b>. Tata Oli, z typową dla siebie pomysłowością, staje przed wyzwaniami, które pokazują, że nie zawsze wszystko idzie zgodnie z planem, a <b>życie na łonie natury</b> może być pełne <b>przygód</b>.</p>
+<p>Książka ta wartościowo rozwija wyobraźnię dzieci, pokazując, że <b>spędzanie czasu z rodziną</b> na świeżym powietrzu może być nie tylko zabawne, ale również <b>edukacyjne</b>. Dzięki humorystycznym sytuacjom z udziałem taty Oli, dzieci uczą się, że dorośli także mają swoje słabości, co czyni tę lekturę <b>uniwersalną</b>.</p>
+<p>„Z tatą Oli na biwaku” to idealna propozycja dla <b>dzieci w wieku przedszkolnym i wczesnoszkolnym</b>, a także dla rodziców, którzy pragną spędzić czas z dziećmi w <b>zabawny</b> i <b>interaktywny</b> sposób. To książka, która rozbawi i dostarczy wielu emocji.</p>
+<p>Czytelnicy zachwycają się nie tylko <b>lekkością</b> i <b>humorem</b> tekstu, ale także <b>ilustracjami</b>, które wzbogacają opowieść. Wiele osób zauważa, że tata Oli staje się wzorem dla dzieci, pokazując, iż <b>rodzicielstwo</b> to sztuka kompromisu i <b>radości</b>, nawet w trudnych sytuacjach.</p>
+<h3>Nie czekaj! Przeżyj niezapomniane chwile z tatą Oli i jego dziećmi na biwaku, zamów swoją książkę już dziś!</h3>
+```"""
 
 default_prompt_taniaksiazka = """Na podstawie poniższych danych stwórz angażujący, zoptymalizowany pod SEO opis produktu w HTML.
 Dane:
@@ -46,6 +73,7 @@ selected_prompt = st.sidebar.selectbox("Wybierz prompt", ["LC - książki", "TK 
 if selected_prompt == "LC - książki":
     st.sidebar.markdown(
         "**Legenda dla LC - książki:**  \n"
+        "- `{lubimy_title}`: Tytuł książki  \n"
         "- `{lubimy_description}`: Opis książki  \n"
         "- `{lubimy_reviews}`: Opinie czytelników"
     )
@@ -73,7 +101,7 @@ with st.form("url_form"):
 # ------------------------#
 
 def get_lubimyczytac_data(url):
-    """Pobiera opis i opinie z Lubimy Czytac."""
+    """Pobiera tytuł, opis i opinie z Lubimy Czytac."""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
         'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -82,6 +110,10 @@ def get_lubimyczytac_data(url):
         response = requests.get(url, headers=headers, timeout=30)
         response.raise_for_status()
         soup = bs(response.text, 'html.parser')
+        
+        # Pobieranie tytułu książki z <h1 class="book__title">
+        title_tag = soup.find('h1', class_='book__title')
+        title = title_tag.get_text(strip=True) if title_tag else ''
         
         # Pobieranie opisu książki
         description_div = soup.find('div', id='book-description')
@@ -95,12 +127,14 @@ def get_lubimyczytac_data(url):
                 reviews.append(text)
         
         return {
+            'title': title,
             'description': description,
             'reviews': "\n\n---\n\n".join(reviews) if reviews else '',
             'error': None
         }
     except Exception as e:
         return {
+            'title': '',
             'description': '',
             'reviews': '',
             'error': f"Błąd pobierania: {str(e)}"
@@ -163,10 +197,11 @@ def get_taniaksiazka_data(url):
 def generate_description_lubimyczytac(book_data, prompt_template):
     """
     Generuje nowy opis na podstawie danych z Lubimy Czytac.
-    W miejsce placeholderów {lubimy_description} i {lubimy_reviews} w prompt_template wstawiane są dane.
+    W miejsce placeholderów {lubimy_title}, {lubimy_description} i {lubimy_reviews} w prompt_template wstawiane są dane.
     """
     try:
         prompt_filled = prompt_template.format(
+            lubimy_title=book_data.get('title', ''),
             lubimy_description=book_data.get('description', ''),
             lubimy_reviews=book_data.get('reviews', '')
         )
@@ -251,6 +286,7 @@ if submit_button:
                 new_description = generate_description_lubimyczytac(book_data, default_prompt_lubimyczytac)
                 results.append({
                     'URL': url,
+                    'Tytuł': book_data.get('title', ''),
                     'Stary opis': book_data.get('description', ''),
                     'Opinie': book_data.get('reviews', ''),
                     'Nowy opis': new_description
