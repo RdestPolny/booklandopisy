@@ -8,11 +8,14 @@ from openai import OpenAI
 # Inicjalizacja Streamlit UI
 st.title('Generator Opisów Książek')
 
-# Initialize OpenAI client
+# Inicjalizacja klienta OpenAI
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-# Pole tekstowe do wklejania adresów URL (po jednym w linii)
-urls_input = st.text_area('Wprowadź adresy URL (po jednym w linii):')
+# Umieszczamy pole tekstowe oraz przycisk w formularzu,
+# aby przetwarzanie uruchamiało się dopiero po naciśnięciu "Uruchom".
+with st.form("url_form"):
+    urls_input = st.text_area('Wprowadź adresy URL (po jednym w linii):')
+    submit_button = st.form_submit_button("Uruchom")
 
 def get_lubimyczytac_data(url):
     """Pobiera opis i opinie z LubimyCzytac"""
@@ -55,7 +58,7 @@ def get_nowaera_data(url):
     """Pobiera dane ze strony sklep.nowaera.pl:
        - Tytuł (H1)
        - Stary opis (wszystkie <p> i <li> wewnątrz div#descriptionArea)
-       - Dodatkowe informacje (teksty zagnieżdżonych divów w div.extra-info__frame)
+       - Dodatkowe informacje (tekst zagnieżdżonych divów w div.extra-info__frame)
     """
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
@@ -72,11 +75,10 @@ def get_nowaera_data(url):
         title_tag = soup.find('h1')
         title = title_tag.get_text(strip=True) if title_tag else ''
         
-        # Pobieramy stary opis z div o id "descriptionArea"
+        # Pobieramy stary opis z div o id "descriptionArea" – wszystkie <p> i <li>
         description_div = soup.find('div', id='descriptionArea')
         description_elements = []
         if description_div:
-            # Szukamy wszystkich <p> oraz <li>
             for tag in description_div.find_all(['p', 'li']):
                 text = tag.get_text(strip=True)
                 if text:
@@ -87,7 +89,6 @@ def get_nowaera_data(url):
         extra_info_div = soup.find('div', class_='extra-info__frame')
         extra_info_elements = []
         if extra_info_div:
-            # Pobieramy teksty zagnieżdżonych divów
             for tag in extra_info_div.find_all('div'):
                 text = tag.get_text(strip=True)
                 if text:
@@ -202,31 +203,31 @@ def generate_description_nowaera(book_data):
             },
             {
                 "role": "user",
-                "content": f"""Jako autor opisów w księgarni internetowej Bookland, twoim zdaniem jest przygotowanie rzetelnego, zoptymalizowanego opisu produktu o tytule "{title}". Oto informacje na których powinieneś bazować "Informacje pobrane z descriptionArea oraz extra-info__frame". Stwórz angażujący opis w HTML z wykorzystaniem:<h2>, <p>, <b>, <ul>, <li>. Opis powinien:
+                "content": f"""Jako autor opisów w księgarni internetowej Bookland, Twoim zadaniem jest przygotowanie rzetelnego, zoptymalizowanego opisu produktu o tytule "{title}". Oto informacje, na których powinieneś bazować (pobrane z descriptionArea oraz extra-info__frame). Stwórz angażujący opis w HTML z wykorzystaniem: <h2>, <p>, <b>, <ul>, <li>. Opis powinien:
 
-1. Zaczyna się od nagłówka <h2> z kreatywnym hasłem nawiązującym do przedmiotu nauki, z którym związany jest podręcznik, oraz jego targetem np. dla uczniów 2 klasy szkoły podstawowej.
-2. Zawiera sekcje:
-   - <p>Wprowadzenie z opisem tego, czym jest dany podręcznik / ćwiczenie / zeszyt ćwiczeń itd. (w zależności od tego, czym jest dany tytuł), informacje na temat jego zawartości, docelowego targetu i tym, co uznasz za stosowne do opisania w kluczowym pierwszym akapicie.</p>
+1. Zaczynać się od nagłówka <h2> z kreatywnym hasłem nawiązującym do przedmiotu nauki, z którym związany jest podręcznik (np. dla uczniów 2 klasy szkoły podstawowej).
+2. Zawierać sekcje:
+   - <p>Wprowadzenie z opisem tego, czym jest dany podręcznik / ćwiczenie / zeszyt ćwiczeń itd. (w zależności od tytułu), z informacjami o jego zawartości, docelowym targetcie i tym, co uznasz za kluczowe do opisania.</p>
    - <p>Zalety / szczególne cechy warte podkreślenia, z <b>wyróżnionymi</b> słowami kluczowymi</p>
    - <p>Wartości i korzyści dla ucznia</p>
    - <p>Podsumowanie</p>
    - <h3>Przekonujący call to action</h3>
 
-3. Wykorzystuje pobrane informacje, aby:
+3. Wykorzystać pobrane informacje, aby:
    - Podkreślić najczęściej wymieniane zalety książki
    - Wzmocnić wiarygodność opisu
 
 4. Formatowanie:
-   - Używaj tagów HTML: <h2>, <p>, <b>, <h3>
-   - Wyróżniaj kluczowe frazy lub informacje godne wzmocnienia za pomocą <b>
-   - Nie używaj znaczników Markdown, tylko HTML
-   - Nie dodawaj komentarzy ani wyjaśnień, tylko sam opis
+   - Używać tagów HTML: <h2>, <p>, <b>, <h3>
+   - Wyróżniać kluczowe frazy lub informacje godne wzmocnienia za pomocą <b>
+   - Nie używać znaczników Markdown, tylko HTML
+   - Nie dodawać komentarzy ani wyjaśnień, tylko sam opis
 
 5. Styl:
    - Opis ma być angażujący, ale profesjonalny
-   - Używaj słownictwa dostosowanego do odbiorcy
-   - Unikaj powtórzeń
-   - Zachowaj spójność tonu
+   - Używać słownictwa dostosowanego do odbiorcy
+   - Unikać powtórzeń
+   - Zachować spójność tonu
 
 6. Przykład formatu:
 ```html
@@ -252,68 +253,62 @@ def generate_description_nowaera(book_data):
         st.error(f"Błąd generowania opisu: {str(e)}")
         return ""
 
-def main():
-    # Użytkownik wkleja adresy w pole tekstowe, a przetwarzanie odpala się dopiero po naciśnięciu przycisku "Uruchom"
-    if st.button("Uruchom"):
-        if urls_input:
-            urls = [url.strip() for url in urls_input.split('\n') if url.strip()]
-            results = []
-            progress_bar = st.progress(0)
-            status_text = st.empty()
+# Przetwarzamy dane tylko po zatwierdzeniu formularza przez przycisk "Uruchom"
+if submit_button:
+    if urls_input:
+        urls = [url.strip() for url in urls_input.split('\n') if url.strip()]
+        results = []
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        for idx, url in enumerate(urls):
+            status_text.info(f'Przetwarzanie {idx+1}/{len(urls)}...')
+            progress_bar.progress((idx + 1) / len(urls))
             
-            for idx, url in enumerate(urls):
-                status_text.info(f'Przetwarzanie {idx+1}/{len(urls)}...')
-                progress_bar.progress((idx + 1) / len(urls))
-                
-                # Wybór sposobu pobierania danych w zależności od domeny
-                if "lubimyczytac" in url:
-                    book_data = get_lubimyczytac_data(url)
-                    if book_data.get('error'):
-                        st.error(f"Błąd dla {url}: {book_data['error']}")
-                        continue
-                    new_description = generate_description(book_data)
-                    results.append({
-                        'URL': url,
-                        'Stary opis': book_data.get('description', ''),
-                        'Opinie': book_data.get('reviews', ''),
-                        'Nowy opis': new_description
-                    })
-                    
-                elif "sklep.nowaera.pl" in url:
-                    book_data = get_nowaera_data(url)
-                    if book_data.get('error'):
-                        st.error(f"Błąd dla {url}: {book_data['error']}")
-                        continue
-                    new_description = generate_description_nowaera(book_data)
-                    results.append({
-                        'URL': url,
-                        'Tytuł': book_data.get('title', ''),
-                        'Stary opis': book_data.get('description', ''),
-                        'Dodatkowe informacje': book_data.get('extra_info', ''),
-                        'Nowy opis': new_description
-                    })
-                    
-                else:
-                    st.error(f"Nieobsługiwana domena dla {url}")
+            # Wybieramy metodę pobierania danych zależnie od domeny
+            if "lubimyczytac" in url:
+                book_data = get_lubimyczytac_data(url)
+                if book_data.get('error'):
+                    st.error(f"Błąd dla {url}: {book_data['error']}")
                     continue
-                    
-                time.sleep(3)  # Ograniczenie częstotliwości zapytań
-            
-            if results:
-                df = pd.DataFrame(results)
-                st.dataframe(df, use_container_width=True)
-                
-                csv = df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="Pobierz dane",
-                    data=csv,
-                    file_name='wygenerowane_opisy.csv',
-                    mime='text/csv'
-                )
+                new_description = generate_description(book_data)
+                results.append({
+                    'URL': url,
+                    'Stary opis': book_data.get('description', ''),
+                    'Opinie': book_data.get('reviews', ''),
+                    'Nowy opis': new_description
+                })
+            elif "sklep.nowaera.pl" in url:
+                book_data = get_nowaera_data(url)
+                if book_data.get('error'):
+                    st.error(f"Błąd dla {url}: {book_data['error']}")
+                    continue
+                new_description = generate_description_nowaera(book_data)
+                results.append({
+                    'URL': url,
+                    'Tytuł': book_data.get('title', ''),
+                    'Stary opis': book_data.get('description', ''),
+                    'Dodatkowe informacje': book_data.get('extra_info', ''),
+                    'Nowy opis': new_description
+                })
             else:
-                st.warning("Nie udało się wygenerować żadnych opisów")
+                st.error(f"Nieobsługiwana domena dla {url}")
+                continue
+                
+            time.sleep(3)  # Ograniczenie częstotliwości zapytań
+        
+        if results:
+            df = pd.DataFrame(results)
+            st.dataframe(df, use_container_width=True)
+            
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="Pobierz dane",
+                data=csv,
+                file_name='wygenerowane_opisy.csv',
+                mime='text/csv'
+            )
         else:
-            st.warning("Proszę wprowadzić adresy URL.")
-
-if __name__ == '__main__':
-    main()
+            st.warning("Nie udało się wygenerować żadnych opisów")
+    else:
+        st.warning("Proszę wprowadzić adresy URL.")
