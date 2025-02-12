@@ -5,7 +5,64 @@ from bs4 import BeautifulSoup as bs
 import time
 from openai import OpenAI
 
-# Inicjalizacja Streamlit UI
+# --- Konfiguracja domyślnych promptów z placeholderami ---
+default_prompt_lubimyczytac = """Na podstawie poniższych danych stwórz zoptymalizowany pod SEO opis książki w HTML.
+Dane:
+Opis książki: {description}
+Opinie czytelników: {reviews}
+
+Opis powinien zawierać:
+- Nagłówek <h2> z kreatywnym hasłem.
+- Kilka akapitów <p> z kluczowymi informacjami.
+- Przekonujący call to action w formie <h3>.
+
+Używaj wyłącznie tagów HTML (nie Markdown) i nie dodawaj dodatkowych komentarzy.
+"""
+
+default_prompt_taniaksiazka = """Na podstawie poniższych danych stwórz angażujący, zoptymalizowany pod SEO opis produktu w HTML.
+Dane:
+Tytuł: {title}
+Szczegóły produktu: {details}
+Opis produktu: {description}
+
+Opis powinien zawierać:
+- Nagłówek <h2> z kreatywnym hasłem odnoszącym się do tytułu.
+- Kilka akapitów <p> z kluczowymi informacjami.
+- Listę <ul><li> z najważniejszymi szczegółami (np. autorzy, rok wydania, oprawa, ilość stron, język, podtytuł, ISBN, dane producenta).
+- Przekonujący call to action w formie <h3>.
+
+Używaj wyłącznie tagów HTML (nie Markdown) i nie dodawaj dodatkowych komentarzy.
+"""
+
+# --- Pasek boczny z konfiguracją promptów ---
+st.sidebar.header("Konfiguracja promptów")
+
+# Dla domeny Lubimy Czytac
+option_lubimyczytac = st.sidebar.selectbox("Prompt dla Lubimy Czytac", ["Domyślny", "Własny"], key="prompt_lubimyczytac_option")
+if option_lubimyczytac == "Własny":
+    custom_prompt_lubimyczytac = st.sidebar.text_area("Edytuj prompt dla Lubimy Czytac", value="", key="custom_prompt_lubimyczytac")
+else:
+    custom_prompt_lubimyczytac = st.sidebar.text_area("Edytuj prompt dla Lubimy Czytac", value=default_prompt_lubimyczytac, key="custom_prompt_lubimyczytac")
+st.sidebar.markdown(
+    "**Legenda dla Lubimy Czytac:**  \n"
+    "- `{description}`: Opis książki  \n"
+    "- `{reviews}`: Opinie czytelników"
+)
+
+# Dla domeny taniaksiazka.pl
+option_taniaksiazka = st.sidebar.selectbox("Prompt dla taniaksiazka.pl", ["Domyślny", "Własny"], key="prompt_taniaksiazka_option")
+if option_taniaksiazka == "Własny":
+    custom_prompt_taniaksiazka = st.sidebar.text_area("Edytuj prompt dla taniaksiazka.pl", value="", key="custom_prompt_taniaksiazka")
+else:
+    custom_prompt_taniaksiazka = st.sidebar.text_area("Edytuj prompt dla taniaksiazka.pl", value=default_prompt_taniaksiazka, key="custom_prompt_taniaksiazka")
+st.sidebar.markdown(
+    "**Legenda dla taniaksiazka.pl:**  \n"
+    "- `{title}`: Tytuł książki  \n"
+    "- `{details}`: Szczegóły produktu  \n"
+    "- `{description}`: Opis produktu"
+)
+
+# --- Inicjalizacja Streamlit UI głównej części ---
 st.title('Generator Opisów Książek')
 
 # Inicjalizacja klienta OpenAI
@@ -16,8 +73,10 @@ with st.form("url_form"):
     urls_input = st.text_area('Wprowadź adresy URL (po jednym w linii):')
     submit_button = st.form_submit_button("Uruchom")
 
+# --- Funkcje pobierające dane z poszczególnych stron ---
+
 def get_lubimyczytac_data(url):
-    """Pobiera opis i opinie z LubimyCzytac (funkcja bez zmian)"""
+    """Pobiera opis i opinie z LubimyCzytac"""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
         'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -52,10 +111,9 @@ def get_lubimyczytac_data(url):
 
 def get_taniaksiazka_data(url):
     """
-    Pobiera dane ze strony taniaksiazka.pl.
-    Wyodrębnia trzy elementy:
+    Pobiera dane ze strony taniaksiazka.pl:
       - Tytuł (z <h1>)
-      - Szczegóły (z <div id="szczegoly"> -> <ul class="bullet">)
+      - Szczegóły (z <div id="szczegoly">, element <ul class="bullet">)
       - Opis (z <div id="product-description">)
     """
     headers = {
@@ -101,37 +159,26 @@ def get_taniaksiazka_data(url):
             'error': f"Błąd pobierania: {str(e)}"
         }
 
-def generate_description_lubimyczytac(book_data):
-    """Generuje nowy opis na podstawie danych z LubimyCzytac (funkcja bez zmian)"""
+# --- Funkcje generujące opisy, wykorzystujące edytowalne prompt-y z placeholderami ---
+
+def generate_description_lubimyczytac(book_data, prompt_template):
+    """
+    Generuje nowy opis na podstawie danych z LubimyCzytac.
+    W miejscu placeholderów {description} i {reviews} w prompt_template wstawiane są dane.
+    """
     try:
+        prompt_filled = prompt_template.format(
+            description=book_data.get('description', ''),
+            reviews=book_data.get('reviews', '')
+        )
         messages = [
             {
                 "role": "system",
-                "content": (
-                    "Jesteś profesjonalnym copywriterem specjalizującym się w tworzeniu opisów książek. "
-                    "Twórz angażujące opisy w HTML z wykorzystaniem: <h2>, <p>, <b>, <ul>, <li>. "
-                    "Uwzględnij opinie czytelników."
-                )
+                "content": "Jesteś profesjonalnym copywriterem specjalizującym się w tworzeniu opisów książek. Twórz angażujące opisy w HTML z wykorzystaniem tagów <h2>, <p>, <b>, <ul>, <li>."
             },
             {
                 "role": "user",
-                "content": f"OPIS KSIĄŻKI: {book_data.get('description', '')}\nOPINIE CZYTELNIKÓW: {book_data.get('reviews', '')}"
-            },
-            {
-                "role": "user",
-                "content": (
-                    "Stwórz optymalizowany pod SEO opis książki w HTML. Opis powinien:\n\n"
-                    "1. Zaczynać się od mocnego nagłówka <h2> z kreatywnym hasłem nawiązującym do treści książki.\n"
-                    "2. Zawierać sekcje:\n"
-                    "   - <p>Wprowadzenie z głównymi zaletami książki</p>\n"
-                    "   - <p>Szczegółowy opis fabuły/treści z <b>wyróżnionymi</b> słowami kluczowymi</p>\n"
-                    "   - <p>Wartości i korzyści dla czytelnika</p>\n"
-                    "   - <p>Podsumowanie opinii czytelników z konkretnymi przykładami</p>\n"
-                    "   - <h3>Przekonujący call to action</h3>\n\n"
-                    "3. Wykorzystać opinie czytelników, aby podkreślić zalety książki.\n"
-                    "4. Formatowanie: Używaj tagów HTML, nie Markdown.\n"
-                    "5. Styl: angażujący, profesjonalny, zoptymalizowany pod SEO."
-                )
+                "content": prompt_filled
             }
         ]
         response = client.chat.completions.create(
@@ -145,19 +192,17 @@ def generate_description_lubimyczytac(book_data):
         st.error(f"Błąd generowania opisu: {str(e)}")
         return ""
 
-def generate_description_taniaksiazka(book_data):
+def generate_description_taniaksiazka(book_data, prompt_template):
     """
-    Generuje nowy opis produktu na podstawie danych pobranych ze strony taniaksiazka.pl.
-    W prompt do API wchodzą:
-      - Tytuł (z <h1>)
-      - Szczegóły (z sekcji "Szczegóły")
-      - Opis (z sekcji "Opis")
+    Generuje nowy opis produktu na podstawie danych ze strony taniaksiazka.pl.
+    W miejscu placeholderów {title}, {details} oraz {description} w prompt_template wstawiane są dane.
     """
     try:
-        title = book_data.get("title", "")
-        details = book_data.get("details", "")
-        description = book_data.get("description", "")
-        
+        prompt_filled = prompt_template.format(
+            title=book_data.get('title', ''),
+            details=book_data.get('details', ''),
+            description=book_data.get('description', '')
+        )
         messages = [
             {
                 "role": "system",
@@ -165,22 +210,9 @@ def generate_description_taniaksiazka(book_data):
             },
             {
                 "role": "user",
-                "content": f"Tytuł: {title}\n\nInformacje o produkcie:\nSzczegóły:\n{details}\n\nOpis:\n{description}"
-            },
-            {
-                "role": "user",
-                "content": (
-                    "Na podstawie powyższych informacji stwórz angażujący, zoptymalizowany pod SEO opis produktu w HTML. "
-                    "Opis powinien zawierać:\n"
-                    "1. Nagłówek <h2> z kreatywnym hasłem, odnoszącym się do tytułu i zawartości produktu.\n"
-                    "2. Kilka akapitów <p> z kluczowymi informacjami o produkcie.\n"
-                    "3. Listę <ul><li> z najważniejszymi szczegółami (np. autorzy, rok wydania, oprawa, ilość stron, język, podtytuł, ISBN, dane producenta).\n"
-                    "4. Przekonujący call to action w formie nagłówka <h3>.\n"
-                    "Używaj tylko tagów HTML (nie Markdown) i nie dodawaj dodatkowych komentarzy."
-                )
+                "content": prompt_filled
             }
         ]
-        
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=messages,
@@ -192,8 +224,7 @@ def generate_description_taniaksiazka(book_data):
         st.error(f"Błąd generowania opisu: {str(e)}")
         return ""
 
-# Przetwarzanie danych po zatwierdzeniu formularza
-# Przetwarzanie danych po zatwierdzeniu formularza
+# --- Przetwarzanie danych po zatwierdzeniu formularza ---
 if submit_button:
     if urls_input:
         urls = [url.strip() for url in urls_input.split('\n') if url.strip()]
@@ -204,26 +235,26 @@ if submit_button:
         for idx, url in enumerate(urls):
             status_text.info(f'Przetwarzanie {idx+1}/{len(urls)}...')
             progress_bar.progress((idx + 1) / len(urls))
+            url_lower = url.lower()
             
-            # Sprawdzamy domenę, porównując adres URL w wersji lowercase
-            if "lubimyczytac" in url.lower():
+            if "lubimyczytac" in url_lower:
                 book_data = get_lubimyczytac_data(url)
                 if book_data.get('error'):
                     st.error(f"Błąd dla {url}: {book_data['error']}")
                     continue
-                new_description = generate_description_lubimyczytac(book_data)
+                new_description = generate_description_lubimyczytac(book_data, custom_prompt_lubimyczytac)
                 results.append({
                     'URL': url,
                     'Stary opis': book_data.get('description', ''),
                     'Opinie': book_data.get('reviews', ''),
                     'Nowy opis': new_description
                 })
-            elif "taniaksiazka.pl" in url.lower():
+            elif "taniaksiazka.pl" in url_lower:
                 book_data = get_taniaksiazka_data(url)
                 if book_data.get('error'):
                     st.error(f"Błąd dla {url}: {book_data['error']}")
                     continue
-                new_description = generate_description_taniaksiazka(book_data)
+                new_description = generate_description_taniaksiazka(book_data, custom_prompt_taniaksiazka)
                 results.append({
                     'URL': url,
                     'Tytuł': book_data.get('title', ''),
