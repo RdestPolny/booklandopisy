@@ -68,7 +68,7 @@ def get_nowaera_data(url):
         
         # DEBUG: wyświetl HTML, aby sprawdzić, czy szukane elementy są obecne
         # Możesz odkomentować poniższą linię, aby zobaczyć HTML w aplikacji (pamiętaj, że może być bardzo obszerny)
-        # st.write(soup.prettify())
+        st.write(soup.prettify())
         
         # Pobieramy tytuł książki z H1
         title_tag = soup.find('h1')
