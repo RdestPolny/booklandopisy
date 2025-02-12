@@ -11,34 +11,31 @@ st.title('Generator Opisów Książek')
 # Inicjalizacja klienta OpenAI
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-# Umieszczamy pole tekstowe oraz przycisk w formularzu,
-# aby przetwarzanie uruchamiało się dopiero po naciśnięciu "Uruchom".
+# Formularz – użytkownik wkleja URL-e, a przetwarzanie uruchamia się po kliknięciu przycisku "Uruchom"
 with st.form("url_form"):
     urls_input = st.text_area('Wprowadź adresy URL (po jednym w linii):')
     submit_button = st.form_submit_button("Uruchom")
 
 def get_lubimyczytac_data(url):
-    """Pobiera opis i opinie z LubimyCzytac"""
+    """Pobiera opis i opinie z LubimyCzytac (funkcja bez zmian)"""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
         'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7',
     }
-    
     try:
         response = requests.get(url, headers=headers, timeout=30)
         response.raise_for_status()
-        
         soup = bs(response.text, 'html.parser')
         
         # Pobieranie opisu książki
         description_div = soup.find('div', id='book-description')
         description = description_div.get_text(strip=True) if description_div else ''
         
-        # Pobieranie opinii z określonego selektora
+        # Pobieranie opinii
         reviews = []
         for review in soup.select('p.expandTextNoJS.p-expanded.js-expanded'):
             text = review.get_text(strip=True)
-            if len(text) > 50:  # Filtrujemy krótkie komentarze
+            if len(text) > 50:
                 reviews.append(text)
         
         return {
@@ -46,7 +43,6 @@ def get_lubimyczytac_data(url):
             'reviews': "\n\n---\n\n".join(reviews) if reviews else '',
             'error': None
         }
-        
     except Exception as e:
         return {
             'description': '',
@@ -54,63 +50,59 @@ def get_lubimyczytac_data(url):
             'error': f"Błąd pobierania: {str(e)}"
         }
 
-def get_nowaera_data(url):
+def get_taniaksiazka_data(url):
+    """
+    Pobiera dane ze strony taniaksiazka.pl.
+    Wyodrębnia trzy elementy:
+      - Tytuł (z <h1>)
+      - Szczegóły (z <div id="szczegoly"> -> <ul class="bullet">)
+      - Opis (z <div id="product-description">)
+    """
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
         'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7',
     }
-    
     try:
         response = requests.get(url, headers=headers, timeout=30)
         response.raise_for_status()
-        
         soup = bs(response.text, 'html.parser')
         
-        # DEBUG: wyświetl HTML, aby sprawdzić, czy szukane elementy są obecne
-        # Możesz odkomentować poniższą linię, aby zobaczyć HTML w aplikacji (pamiętaj, że może być bardzo obszerny)
-        st.write(soup.prettify())
-        
-        # Pobieramy tytuł książki z H1
+        # Pobieramy tytuł książki z <h1>
         title_tag = soup.find('h1')
         title = title_tag.get_text(strip=True) if title_tag else ''
         
-        # Pobieramy stary opis z div o id "descriptionArea" – wszystkie <p> i <li>
-        description_div = soup.find('div', id='descriptionArea')
-        description_elements = []
-        if description_div:
-            for tag in description_div.find_all(['p', 'li']):
-                text = tag.get_text(strip=True)
-                if text:
-                    description_elements.append(text)
-        description = "\n\n".join(description_elements)
+        # Pobieramy szczegóły – szukamy diva o id "szczegoly" i wewnątrz <ul class="bullet">
+        details_text = ""
+        details_div = soup.find("div", id="szczegoly")
+        if details_div:
+            ul = details_div.find("ul", class_="bullet")
+            if ul:
+                li_elements = ul.find_all("li")
+                details_list = [li.get_text(separator=" ", strip=True) for li in li_elements]
+                details_text = "\n".join(details_list)
         
-        # Pobieramy dodatkowe informacje z div o klasie "extra-info__frame"
-        extra_info_div = soup.find('div', class_='extra-info__frame')
-        extra_info_elements = []
-        if extra_info_div:
-            for tag in extra_info_div.find_all('div'):
-                text = tag.get_text(strip=True)
-                if text:
-                    extra_info_elements.append(text)
-        extra_info = "\n\n".join(extra_info_elements)
+        # Pobieramy opis – szukamy diva o id "product-description"
+        description_text = ""
+        description_div = soup.find("div", id="product-description")
+        if description_div:
+            description_text = description_div.get_text(separator="\n", strip=True)
         
         return {
             'title': title,
-            'description': description,
-            'extra_info': extra_info,
+            'details': details_text,
+            'description': description_text,
             'error': None
         }
-        
     except Exception as e:
         return {
             'title': '',
+            'details': '',
             'description': '',
-            'extra_info': '',
             'error': f"Błąd pobierania: {str(e)}"
         }
 
-def generate_description(book_data):
-    """Generuje nowy opis na podstawie danych pobranych z LubimyCzytac"""
+def generate_description_lubimyczytac(book_data):
+    """Generuje nowy opis na podstawie danych z LubimyCzytac (funkcja bez zmian)"""
     try:
         messages = [
             {
@@ -129,44 +121,62 @@ def generate_description(book_data):
                 "role": "user",
                 "content": (
                     "Stwórz optymalizowany pod SEO opis książki w HTML. Opis powinien:\n\n"
-                    "1. Zaczyna się od mocnego nagłówka <h2> z kreatywnym hasłem nawiązującym do treści książki.\n"
-                    "2. Zawiera sekcje:\n"
+                    "1. Zaczynać się od mocnego nagłówka <h2> z kreatywnym hasłem nawiązującym do treści książki.\n"
+                    "2. Zawierać sekcje:\n"
                     "   - <p>Wprowadzenie z głównymi zaletami książki</p>\n"
                     "   - <p>Szczegółowy opis fabuły/treści z <b>wyróżnionymi</b> słowami kluczowymi</p>\n"
                     "   - <p>Wartości i korzyści dla czytelnika</p>\n"
                     "   - <p>Podsumowanie opinii czytelników z konkretnymi przykładami</p>\n"
                     "   - <h3>Przekonujący call to action</h3>\n\n"
-                    "3. Wykorzystuje opinie czytelników, aby:\n"
-                    "   - Podkreślić najczęściej wymieniane zalety książki\n"
-                    "   - Wzmocnić wiarygodność opisu\n"
-                    "   - Dodać emocje i autentyczność\n\n"
-                    "4. Formatowanie:\n"
-                    "   - Używaj tagów HTML: <h2>, <p>, <b>, <h3>\n"
-                    "   - Wyróżniaj kluczowe frazy za pomocą <b>\n"
-                    "   - Nie używaj znaczników Markdown, tylko HTML\n"
-                    "   - Nie dodawaj komentarzy ani wyjaśnień, tylko sam opis\n\n"
-                    "5. Styl:\n"
-                    "   - Opis ma być angażujący, ale profesjonalny\n"
-                    "   - Używaj słownictwa dostosowanego do gatunku książki\n"
-                    "   - Unikaj powtórzeń\n"
-                    "   - Zachowaj spójność tonu\n\n"
-                    "6. Przykład formatu:\n"
-                    "```html\n"
-                    "<h2>Przygoda na świeżym powietrzu z tatą Oli czeka na każdą rodzinę!</h2>\n"
-                    "<p>„Tata Oli. Tom 3. Z tatą Oli na biwaku” to <b>pełna humoru</b> i <b>przygód</b> opowieść, która z pewnością zachwyci najmłodszych czytelników oraz ich rodziców. "
-                    "Ta książka łączy w sobie <b>fantastyczne ilustracje</b> z doskonałym tekstem, który bawi do łez, a jednocześnie skłania do refleksji nad <b>relacjami rodzinnymi</b>.</p>\n"
-                    "<p>W tej części tata Oli postanawia <b>oderwać dzieci</b> od ekranów i zorganizować im prawdziwy <b>biwak</b>. "
-                    "Wspólnie stają przed nie lada wyzwaniem: muszą <b>rozpalić ognisko</b>, <b>łowić ryby</b> i cieszyć się <b>urokami natury</b>. "
-                    "Jednak zamiast sielanki, napotykają na wiele zabawnych przeszkód, co prowadzi do sytuacji pełnych <b>śmiechu</b> i <b>niespodzianek</b>. "
-                    "Tata Oli, z typową dla siebie pomysłowością, staje przed wyzwaniami, które pokazują, że nie zawsze wszystko idzie zgodnie z planem, a <b>życie na łonie natury</b> może być pełne <b>przygód</b>.</p>\n"
-                    "<p>Książka ta wartościowo rozwija wyobraźnię dzieci, pokazując, że <b>spędzanie czasu z rodziną</b> na świeżym powietrzu może być nie tylko zabawne, ale również <b>edukacyjne</b>. "
-                    "Dzięki humorystycznym sytuacjom z udziałem taty Oli, dzieci uczą się, że dorośli także mają swoje słabości, co czyni tę lekturę <b>uniwersalną</b>.</p>\n"
-                    "<p>„Z tatą Oli na biwaku” to idealna propozycja dla <b>dzieci w wieku przedszkolnym i wczesnoszkolnym</b>, a także dla rodziców, którzy pragną spędzić czas z dziećmi w <b>zabawny</b> i <b>interaktywny</b> sposób. "
-                    "To książka, która rozbawi i dostarczy wielu emocji.</p>\n"
-                    "<p>Czytelnicy zachwycają się nie tylko <b>lekkością</b> i <b>humorem</b> tekstu, ale także <b>ilustracjami</b>, które wzbogacają opowieść. "
-                    "Wiele osób zauważa, że tata Oli staje się wzorem dla dzieci, pokazując, iż <b>rodzicielstwo</b> to sztuka kompromisu i <b>radości</b>, nawet w trudnych sytuacjach.</p>\n"
-                    "<h3>Nie czekaj! Przeżyj niezapomniane chwile z tatą Oli i jego dziećmi na biwaku, zamów swoją książkę już dziś!</h3>\n"
-                    "```"
+                    "3. Wykorzystać opinie czytelników, aby podkreślić zalety książki.\n"
+                    "4. Formatowanie: Używaj tagów HTML, nie Markdown.\n"
+                    "5. Styl: angażujący, profesjonalny, zoptymalizowany pod SEO."
+                )
+            }
+        ]
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            temperature=0.7,
+            max_tokens=2000
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        st.error(f"Błąd generowania opisu: {str(e)}")
+        return ""
+
+def generate_description_taniaksiazka(book_data):
+    """
+    Generuje nowy opis produktu na podstawie danych pobranych ze strony taniaksiazka.pl.
+    W prompt do API wchodzą:
+      - Tytuł (z <h1>)
+      - Szczegóły (z sekcji "Szczegóły")
+      - Opis (z sekcji "Opis")
+    """
+    try:
+        title = book_data.get("title", "")
+        details = book_data.get("details", "")
+        description = book_data.get("description", "")
+        
+        messages = [
+            {
+                "role": "system",
+                "content": "Jesteś doświadczonym copywriterem specjalizującym się w tworzeniu opisów produktów dla księgarni internetowej."
+            },
+            {
+                "role": "user",
+                "content": f"Tytuł: {title}\n\nInformacje o produkcie:\nSzczegóły:\n{details}\n\nOpis:\n{description}"
+            },
+            {
+                "role": "user",
+                "content": (
+                    "Na podstawie powyższych informacji stwórz angażujący, zoptymalizowany pod SEO opis produktu w HTML. "
+                    "Opis powinien zawierać:\n"
+                    "1. Nagłówek <h2> z kreatywnym hasłem, odnoszącym się do tytułu i zawartości produktu.\n"
+                    "2. Kilka akapitów <p> z kluczowymi informacjami o produkcie.\n"
+                    "3. Listę <ul><li> z najważniejszymi szczegółami (np. autorzy, rok wydania, oprawa, ilość stron, język, podtytuł, ISBN, dane producenta).\n"
+                    "4. Przekonujący call to action w formie nagłówka <h3>.\n"
+                    "Używaj tylko tagów HTML (nie Markdown) i nie dodawaj dodatkowych komentarzy."
                 )
             }
         ]
@@ -177,82 +187,12 @@ def generate_description(book_data):
             temperature=0.7,
             max_tokens=2000
         )
-        
         return response.choices[0].message.content
-        
     except Exception as e:
         st.error(f"Błąd generowania opisu: {str(e)}")
         return ""
 
-def generate_description_nowaera(book_data):
-    """Generuje nowy opis na podstawie danych pobranych ze sklep.nowaera.pl"""
-    try:
-        title = book_data.get('title', '')
-        description = book_data.get('description', '')
-        extra_info = book_data.get('extra_info', '')
-        
-        messages = [
-            {
-                "role": "system",
-                "content": "Jesteś autorem opisów w księgarni internetowej Bookland."
-            },
-            {
-                "role": "user",
-                "content": f"Tytuł książki: {title}\nInformacje: {description}\nDodatkowe informacje: {extra_info}"
-            },
-            {
-                "role": "user",
-                "content": f"""Jako autor opisów w księgarni internetowej Bookland, Twoim zadaniem jest przygotowanie rzetelnego, zoptymalizowanego opisu produktu o tytule "{title}". Oto informacje, na których powinieneś bazować (pobrane z descriptionArea oraz extra-info__frame). Stwórz angażujący opis w HTML z wykorzystaniem: <h2>, <p>, <b>, <ul>, <li>. Opis powinien:
-
-1. Zaczynać się od nagłówka <h2> z kreatywnym hasłem nawiązującym do przedmiotu nauki, z którym związany jest podręcznik (np. dla uczniów 2 klasy szkoły podstawowej).
-2. Zawierać sekcje:
-   - <p>Wprowadzenie z opisem tego, czym jest dany podręcznik / ćwiczenie / zeszyt ćwiczeń itd. (w zależności od tytułu), z informacjami o jego zawartości, docelowym targetcie i tym, co uznasz za kluczowe do opisania.</p>
-   - <p>Zalety / szczególne cechy warte podkreślenia, z <b>wyróżnionymi</b> słowami kluczowymi</p>
-   - <p>Wartości i korzyści dla ucznia</p>
-   - <p>Podsumowanie</p>
-   - <h3>Przekonujący call to action</h3>
-
-3. Wykorzystać pobrane informacje, aby:
-   - Podkreślić najczęściej wymieniane zalety książki
-   - Wzmocnić wiarygodność opisu
-
-4. Formatowanie:
-   - Używać tagów HTML: <h2>, <p>, <b>, <h3>
-   - Wyróżniać kluczowe frazy lub informacje godne wzmocnienia za pomocą <b>
-   - Nie używać znaczników Markdown, tylko HTML
-   - Nie dodawać komentarzy ani wyjaśnień, tylko sam opis
-
-5. Styl:
-   - Opis ma być angażujący, ale profesjonalny
-   - Używać słownictwa dostosowanego do odbiorcy
-   - Unikać powtórzeń
-   - Zachować spójność tonu
-
-6. Przykład formatu:
-```html
-<h2>zawartość</h2>
-<p>zawartość</p>
-<p>zawartość</p>
-<p>zawartość</p>
-<h3>CTA</h3>
-```"""
-            }
-        ]
-        
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages,
-            temperature=0.7,
-            max_tokens=2000
-        )
-        
-        return response.choices[0].message.content
-        
-    except Exception as e:
-        st.error(f"Błąd generowania opisu: {str(e)}")
-        return ""
-
-# Przetwarzamy dane tylko po zatwierdzeniu formularza przez przycisk "Uruchom"
+# Przetwarzanie danych po zatwierdzeniu formularza
 if submit_button:
     if urls_input:
         urls = [url.strip() for url in urls_input.split('\n') if url.strip()]
@@ -264,30 +204,30 @@ if submit_button:
             status_text.info(f'Przetwarzanie {idx+1}/{len(urls)}...')
             progress_bar.progress((idx + 1) / len(urls))
             
-            # Wybieramy metodę pobierania danych zależnie od domeny
+            # Wybór metody pobierania danych w zależności od domeny
             if "lubimyczytac" in url:
                 book_data = get_lubimyczytac_data(url)
                 if book_data.get('error'):
                     st.error(f"Błąd dla {url}: {book_data['error']}")
                     continue
-                new_description = generate_description(book_data)
+                new_description = generate_description_lubimyczytac(book_data)
                 results.append({
                     'URL': url,
                     'Stary opis': book_data.get('description', ''),
                     'Opinie': book_data.get('reviews', ''),
                     'Nowy opis': new_description
                 })
-            elif "sklep.nowaera.pl" in url:
-                book_data = get_nowaera_data(url)
+            elif "taniaksiazka.pl" in url:
+                book_data = get_taniaksiazka_data(url)
                 if book_data.get('error'):
                     st.error(f"Błąd dla {url}: {book_data['error']}")
                     continue
-                new_description = generate_description_nowaera(book_data)
+                new_description = generate_description_taniaksiazka(book_data)
                 results.append({
                     'URL': url,
                     'Tytuł': book_data.get('title', ''),
-                    'Stary opis': book_data.get('description', ''),
-                    'Dodatkowe informacje': book_data.get('extra_info', ''),
+                    'Szczegóły': book_data.get('details', ''),
+                    'Opis': book_data.get('description', ''),
                     'Nowy opis': new_description
                 })
             else:
@@ -295,7 +235,7 @@ if submit_button:
                 continue
                 
             time.sleep(3)  # Ograniczenie częstotliwości zapytań
-        
+            
         if results:
             df = pd.DataFrame(results)
             st.dataframe(df, use_container_width=True)
