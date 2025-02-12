@@ -5,11 +5,14 @@ from bs4 import BeautifulSoup as bs
 import time
 from openai import OpenAI
 
-# --- Konfiguracja domyślnych promptów z placeholderami ---
+# ------------------------#
+# Domyślne prompty z unikalnymi zmiennymi
+# ------------------------#
+
 default_prompt_lubimyczytac = """Na podstawie poniższych danych stwórz zoptymalizowany pod SEO opis książki w HTML.
 Dane:
-Opis książki: {description}
-Opinie czytelników: {reviews}
+Opis książki: {lubimy_description}
+Opinie czytelników: {lubimy_reviews}
 
 Opis powinien zawierać:
 - Nagłówek <h2> z kreatywnym hasłem.
@@ -21,9 +24,9 @@ Używaj wyłącznie tagów HTML (nie Markdown) i nie dodawaj dodatkowych komenta
 
 default_prompt_taniaksiazka = """Na podstawie poniższych danych stwórz angażujący, zoptymalizowany pod SEO opis produktu w HTML.
 Dane:
-Tytuł: {title}
-Szczegóły produktu: {details}
-Opis produktu: {description}
+Tytuł: {taniaksiazka_title}
+Szczegóły produktu: {taniaksiazka_details}
+Opis produktu: {taniaksiazka_description}
 
 Opis powinien zawierać:
 - Nagłówek <h2> z kreatywnym hasłem odnoszącym się do tytułu.
@@ -34,22 +37,24 @@ Opis powinien zawierać:
 Używaj wyłącznie tagów HTML (nie Markdown) i nie dodawaj dodatkowych komentarzy.
 """
 
-# --- Pasek boczny z konfiguracją promptów ---
+# ------------------------#
+# Pasek boczny – konfiguracja promptów
+# ------------------------#
 st.sidebar.header("Konfiguracja promptów")
 
-# Dla domeny Lubimy Czytac
-option_lubimyczytac = st.sidebar.selectbox("Prompt dla Lubimy Czytac", ["Domyślny", "Własny"], key="prompt_lubimyczytac_option")
+# Prompt dla Lubimy Czytac
+option_lubimyczytac = st.sidebar.selectbox("Prompt dla Lubimy Czytac", ["Domyślny", "Własny"], key="prompt_lubimy_option")
 if option_lubimyczytac == "Własny":
-    custom_prompt_lubimyczytac = st.sidebar.text_area("Edytuj prompt dla Lubimy Czytac", value="", key="custom_prompt_lubimyczytac")
+    custom_prompt_lubimyczytac = st.sidebar.text_area("Edytuj prompt dla Lubimy Czytac", value="", key="custom_prompt_lubimy")
 else:
-    custom_prompt_lubimyczytac = st.sidebar.text_area("Edytuj prompt dla Lubimy Czytac", value=default_prompt_lubimyczytac, key="custom_prompt_lubimyczytac")
+    custom_prompt_lubimyczytac = st.sidebar.text_area("Edytuj prompt dla Lubimy Czytac", value=default_prompt_lubimyczytac, key="custom_prompt_lubimy")
 st.sidebar.markdown(
     "**Legenda dla Lubimy Czytac:**  \n"
-    "- `{description}`: Opis książki  \n"
-    "- `{reviews}`: Opinie czytelników"
+    "- `{lubimy_description}`: Opis książki  \n"
+    "- `{lubimy_reviews}`: Opinie czytelników"
 )
 
-# Dla domeny taniaksiazka.pl
+# Prompt dla taniaksiazka.pl
 option_taniaksiazka = st.sidebar.selectbox("Prompt dla taniaksiazka.pl", ["Domyślny", "Własny"], key="prompt_taniaksiazka_option")
 if option_taniaksiazka == "Własny":
     custom_prompt_taniaksiazka = st.sidebar.text_area("Edytuj prompt dla taniaksiazka.pl", value="", key="custom_prompt_taniaksiazka")
@@ -57,26 +62,31 @@ else:
     custom_prompt_taniaksiazka = st.sidebar.text_area("Edytuj prompt dla taniaksiazka.pl", value=default_prompt_taniaksiazka, key="custom_prompt_taniaksiazka")
 st.sidebar.markdown(
     "**Legenda dla taniaksiazka.pl:**  \n"
-    "- `{title}`: Tytuł książki  \n"
-    "- `{details}`: Szczegóły produktu  \n"
-    "- `{description}`: Opis produktu"
+    "- `{taniaksiazka_title}`: Tytuł książki  \n"
+    "- `{taniaksiazka_details}`: Szczegóły produktu  \n"
+    "- `{taniaksiazka_description}`: Opis produktu"
 )
 
-# --- Inicjalizacja Streamlit UI głównej części ---
+# ------------------------#
+# Główna część aplikacji
+# ------------------------#
+
 st.title('Generator Opisów Książek')
 
 # Inicjalizacja klienta OpenAI
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-# Formularz – użytkownik wkleja URL-e, a przetwarzanie uruchamia się po kliknięciu przycisku "Uruchom"
+# Formularz – użytkownik wkleja URL-e; przetwarzanie uruchamia się po kliknięciu "Uruchom"
 with st.form("url_form"):
     urls_input = st.text_area('Wprowadź adresy URL (po jednym w linii):')
     submit_button = st.form_submit_button("Uruchom")
 
-# --- Funkcje pobierające dane z poszczególnych stron ---
+# ------------------------#
+# Funkcje pobierające dane
+# ------------------------#
 
 def get_lubimyczytac_data(url):
-    """Pobiera opis i opinie z LubimyCzytac"""
+    """Pobiera opis i opinie z Lubimy Czytac."""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
         'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -159,17 +169,19 @@ def get_taniaksiazka_data(url):
             'error': f"Błąd pobierania: {str(e)}"
         }
 
-# --- Funkcje generujące opisy, wykorzystujące edytowalne prompt-y z placeholderami ---
+# ------------------------#
+# Funkcje generujące opisy z wykorzystaniem promptów
+# ------------------------#
 
 def generate_description_lubimyczytac(book_data, prompt_template):
     """
-    Generuje nowy opis na podstawie danych z LubimyCzytac.
-    W miejscu placeholderów {description} i {reviews} w prompt_template wstawiane są dane.
+    Generuje nowy opis na podstawie danych z Lubimy Czytac.
+    W miejsce placeholderów {lubimy_description} i {lubimy_reviews} w prompt_template wstawiane są dane.
     """
     try:
         prompt_filled = prompt_template.format(
-            description=book_data.get('description', ''),
-            reviews=book_data.get('reviews', '')
+            lubimy_description=book_data.get('description', ''),
+            lubimy_reviews=book_data.get('reviews', '')
         )
         messages = [
             {
@@ -195,13 +207,13 @@ def generate_description_lubimyczytac(book_data, prompt_template):
 def generate_description_taniaksiazka(book_data, prompt_template):
     """
     Generuje nowy opis produktu na podstawie danych ze strony taniaksiazka.pl.
-    W miejscu placeholderów {title}, {details} oraz {description} w prompt_template wstawiane są dane.
+    W miejsce placeholderów {taniaksiazka_title}, {taniaksiazka_details} oraz {taniaksiazka_description} w prompt_template wstawiane są dane.
     """
     try:
         prompt_filled = prompt_template.format(
-            title=book_data.get('title', ''),
-            details=book_data.get('details', ''),
-            description=book_data.get('description', '')
+            taniaksiazka_title=book_data.get('title', ''),
+            taniaksiazka_details=book_data.get('details', ''),
+            taniaksiazka_description=book_data.get('description', '')
         )
         messages = [
             {
@@ -224,7 +236,10 @@ def generate_description_taniaksiazka(book_data, prompt_template):
         st.error(f"Błąd generowania opisu: {str(e)}")
         return ""
 
-# --- Przetwarzanie danych po zatwierdzeniu formularza ---
+# ------------------------#
+# Przetwarzanie danych po zatwierdzeniu formularza
+# ------------------------#
+
 if submit_button:
     if urls_input:
         urls = [url.strip() for url in urls_input.split('\n') if url.strip()]
