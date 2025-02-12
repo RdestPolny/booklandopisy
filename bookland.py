@@ -55,11 +55,6 @@ def get_lubimyczytac_data(url):
         }
 
 def get_nowaera_data(url):
-    """Pobiera dane ze strony sklep.nowaera.pl:
-       - Tytuł (H1)
-       - Stary opis (wszystkie <p> i <li> wewnątrz div#descriptionArea)
-       - Dodatkowe informacje (tekst zagnieżdżonych divów w div.extra-info__frame)
-    """
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
         'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -70,6 +65,10 @@ def get_nowaera_data(url):
         response.raise_for_status()
         
         soup = bs(response.text, 'html.parser')
+        
+        # DEBUG: wyświetl HTML, aby sprawdzić, czy szukane elementy są obecne
+        # Możesz odkomentować poniższą linię, aby zobaczyć HTML w aplikacji (pamiętaj, że może być bardzo obszerny)
+        # st.write(soup.prettify())
         
         # Pobieramy tytuł książki z H1
         title_tag = soup.find('h1')
