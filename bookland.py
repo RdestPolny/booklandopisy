@@ -40,9 +40,10 @@ Używaj wyłącznie tagów HTML (nie Markdown) i nie dodawaj dodatkowych komenta
 # ------------------------#
 # Pasek boczny – konfiguracja promptów
 # ------------------------#
+
 st.sidebar.header("Konfiguracja promptów")
 
-# Prompt dla Lubimy Czytac
+# Konfiguracja promptu dla Lubimy Czytac (uproszczona)
 option_lubimyczytac = st.sidebar.selectbox("Prompt dla Lubimy Czytac", ["Domyślny", "Własny"], key="prompt_lubimy_option")
 if option_lubimyczytac == "Własny":
     custom_prompt_lubimyczytac = st.sidebar.text_area("Edytuj prompt dla Lubimy Czytac", value="", key="custom_prompt_lubimy")
@@ -54,18 +55,41 @@ st.sidebar.markdown(
     "- `{lubimy_reviews}`: Opinie czytelników"
 )
 
-# Prompt dla taniaksiazka.pl
-option_taniaksiazka = st.sidebar.selectbox("Prompt dla taniaksiazka.pl", ["Domyślny", "Własny"], key="prompt_taniaksiazka_option")
-if option_taniaksiazka == "Własny":
-    custom_prompt_taniaksiazka = st.sidebar.text_area("Edytuj prompt dla taniaksiazka.pl", value="", key="custom_prompt_taniaksiazka")
-else:
-    custom_prompt_taniaksiazka = st.sidebar.text_area("Edytuj prompt dla taniaksiazka.pl", value=default_prompt_taniaksiazka, key="custom_prompt_taniaksiazka")
+# Zaawansowana konfiguracja promptów dla taniaksiazka.pl
+if "taniaksiazka_prompts" not in st.session_state:
+    st.session_state.taniaksiazka_prompts = [{"name": "Domyślny", "text": default_prompt_taniaksiazka}]
+
+st.sidebar.header("Prompty dla taniaksiazka.pl")
+selected_taniaksiazka_prompt_index = st.sidebar.selectbox(
+    "Wybierz prompt",
+    list(range(len(st.session_state.taniaksiazka_prompts))),
+    format_func=lambda i: st.session_state.taniaksiazka_prompts[i]["name"],
+    key="selected_taniaksiazka_prompt_index"
+)
+edited_taniaksiazka_prompt = st.sidebar.text_area(
+    "Edytuj wybrany prompt", 
+    value=st.session_state.taniaksiazka_prompts[selected_taniaksiazka_prompt_index]["text"], 
+    key="edited_taniaksiazka_prompt"
+)
+if st.sidebar.button("Zapisz zmiany dla wybranego promptu"):
+    st.session_state.taniaksiazka_prompts[selected_taniaksiazka_prompt_index]["text"] = edited_taniaksiazka_prompt
+    st.sidebar.success("Prompt zaktualizowany!")
+
 st.sidebar.markdown(
     "**Legenda dla taniaksiazka.pl:**  \n"
     "- `{taniaksiazka_title}`: Tytuł książki  \n"
     "- `{taniaksiazka_details}`: Szczegóły produktu  \n"
     "- `{taniaksiazka_description}`: Opis produktu"
 )
+
+new_prompt_name = st.sidebar.text_input("Nazwa nowego promptu", key="new_prompt_name")
+new_prompt_text = st.sidebar.text_area("Tekst nowego promptu", value="", key="new_prompt_text")
+if st.sidebar.button("Dodaj nowy prompt"):
+    if new_prompt_name and new_prompt_text:
+        st.session_state.taniaksiazka_prompts.append({"name": new_prompt_name, "text": new_prompt_text})
+        st.sidebar.success(f"Prompt '{new_prompt_name}' dodany!")
+    else:
+        st.sidebar.error("Wprowadź nazwę i tekst nowego promptu.")
 
 # ------------------------#
 # Główna część aplikacji
@@ -76,7 +100,7 @@ st.title('Generator Opisów Książek')
 # Inicjalizacja klienta OpenAI
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-# Formularz – użytkownik wkleja URL-e; przetwarzanie uruchamia się po kliknięciu "Uruchom"
+# Formularz – użytkownik wkleja URL-e, przetwarzanie uruchamia się po kliknięciu "Uruchom"
 with st.form("url_form"):
     urls_input = st.text_area('Wprowadź adresy URL (po jednym w linii):')
     submit_button = st.form_submit_button("Uruchom")
@@ -269,7 +293,9 @@ if submit_button:
                 if book_data.get('error'):
                     st.error(f"Błąd dla {url}: {book_data['error']}")
                     continue
-                new_description = generate_description_taniaksiazka(book_data, custom_prompt_taniaksiazka)
+                # Używamy wybranego promptu dla taniaksiazka.pl
+                custom_prompt = st.session_state.taniaksiazka_prompts[selected_taniaksiazka_prompt_index]["text"]
+                new_description = generate_description_taniaksiazka(book_data, custom_prompt)
                 results.append({
                     'URL': url,
                     'Tytuł': book_data.get('title', ''),
