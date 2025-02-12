@@ -49,27 +49,27 @@ Opis powinien zawierać:
 
 default_prompt_taniaksiazka = """Jako autor opisów w księgarni internetowej Bookland, twoim zdaniem jest przygotowanie rzetelnego, zoptymalizowanego opisu produktu o tytule "{taniaksiazka_title}". Oto informacje, na których powinieneś bazować: {taniaksiazka_details} {taniaksiazka_description}. Stwórz angażujący opis w HTML z wykorzystaniem:<h2>, <p>, <b>, <ul>, <li>. Opis powinien:
 
-1. Zaczyna się od nagłówka <h2> z kreatywnym hasłem nawiązującym do przedmiotu nauki, z którym związany jest podręcznik oraz jego targetem np. dla uczniów 2 klasy szkoły podstawowej.
-2. Zawiera sekcje:
-   - <p>Wprowadzenie z opisem tego, czym jest dany podręcznik / ćwiczenie / zeszyt ćwiczeń itd. (w zależności od tego, czym jest dany tytuł), informacje na temat jego zawartości, docelowego targetu i tym, co uznasz za stosowne do opisania w kluczowym pierwszym akapicie.</p>
-   - <p>Zalety / szczególne cechy warte podkreślenia, z <b>wyróżnionymi</b> słowami kluczowymi</p>
-   - <p>Wartości i korzyści dla ucznia</p>
-   - <p>Podsumowanie</p>
-   - <h3>Przekonujący call to action</h3>
-3. Wykorzystuje pobrane informacje, aby:
+1. Zawiera sekcje:
+   <h2> z kreatywnym hasłem nawiązującym do przedmiotu nauki, z którym związany jest podręcznik oraz jego targetem np. dla uczniów 2 klasy szkoły podstawowej.
+   <p>Wprowadzenie z opisem tego, czym jest dany podręcznik / ćwiczenie / zeszyt ćwiczeń itd. (w zależności od tego, czym jest dany tytuł), informacje na temat jego zawartości, docelowego targetu i tym, co uznasz za stosowne do opisania w kluczowym pierwszym akapicie.</p>
+   <p>Zalety / szczególne cechy warte podkreślenia, z <b>wyróżnionymi</b> słowami kluczowymi</p>
+   <p>Wartości i korzyści dla ucznia</p>
+   <p>Podsumowanie</p>
+   <h3>Przekonujący call to action</h3>
+2. Wykorzystuje pobrane informacje, aby:
    - Podkreślić najczęściej wymieniane zalety książki
    - Wzmocnić wiarygodność opisu
-4. Formatowanie:
+3. Formatowanie:
    - Używaj tagów HTML: <h2>, <p>, <b>, <h3>
    - Wyróżniaj kluczowe frazy lub informacje godne wzmocnienia za pomocą <b>
    - Nie używaj znaczników Markdown, tylko HTML
    - Nie dodawaj komentarzy ani wyjaśnień, tylko sam opis
-5. Styl:
+4. Styl:
    - Opis ma być angażujący, ale profesjonalny
    - Używaj słownictwa dostosowanego do odbiorcy
    - Unikaj powtórzeń
    - Zachowaj spójność tonu
-6. Przykład formatu:
+5. Przykład formatu:
 
 ```html
 <h2>nagłówek</h2>
@@ -82,33 +82,34 @@ default_prompt_taniaksiazka = """Jako autor opisów w księgarni internetowej Bo
 default_prompt_gry_planszowe = """Jako autor opisów w księgarni internetowej Bookland, twoim zdaniem jest przygotowanie rzetelnego, zoptymalizowanego opisu produktu o tytule "{taniaksiazka_title}". Oto informacje, na których powinieneś bazować: {taniaksiazka_details} {taniaksiazka_description}. Stwórz angażujący opis w HTML z wykorzystaniem:<h2>, <p>, <b>, <ul>, <li>. Opis powinien:
 
     Zaczyna się od nagłówka <h2> z kreatywnym hasłem, które oddaje emocje i charakter gry planszowej oraz wskazuje na grupę docelową, np. dla miłośników strategii i rozgrywek rodzinnych.
-    Zawiera sekcje:
-        <p>Wprowadzenie, które przedstawia grę, jej tematykę, mechanikę oraz główne cechy, takie jak czas rozgrywki i poziom trudności.</p>
-        <p>Szczegółowy opis rozgrywki z <b>wyróżnionymi</b> słowami kluczowymi, podkreślającymi unikalne elementy, takie jak interakcja, strategia i rywalizacja.</p>
+    1. Zawiera sekcje:
+        <p>Wprowadzenie, które przedstawia grę, jej tematykę, mechanikę (jeśli masz na jej temat informacje w pobranych danych) oraz główne cechy, takie jak czas rozgrywki i poziom trudności.</p>
+        <p>Opis rozgrywki z <b>wyróżnionymi</b> słowami kluczowymi, podkreślającymi unikalne elementy, takie jak interakcja, strategia i rywalizacja. (trzymaj się informacji jakie pobrałeś z dotychczasowego opisu, jeśli nie wiesz jaka jest mechanika lub na czym polegają zasady, to nie pisz o nich szczególowo, żeby nie wprowadzić nikogo w błąd)</p>
         <p>Korzyści dla graczy, np. rozwój umiejętności logicznego myślenia, budowanie relacji rodzinnych oraz doskonała zabawa.</p>
         <p>Podsumowanie, które zachęca do zakupu i podkreśla, dlaczego ta gra planszowa jest wyjątkowa.</p>
         <h3>Przekonujący call to action</h3>
-    Wykorzystuje pobrane informacje, aby:
-        Podkreślić najważniejsze cechy gry planszowej
-        Wzmocnić wiarygodność opisu poprzez konkretne przykłady
-    Formatowanie:
-        Używaj tagów HTML: <h2>, <p>, <b>, <h3>
-        Wyróżniaj kluczowe frazy za pomocą <b>
-        Nie używaj znaczników Markdown, tylko HTML
-        Nie dodawaj komentarzy ani wyjaśnień, tylko sam opis
-    Styl:
-        Opis ma być angażujący, ale profesjonalny
-        Używaj słownictwa dostosowanego do miłośników gier planszowych
-        Unikaj powtórzeń
-        Zachowaj spójność tonu
+    2. Wykorzystuje pobrane informacje, aby:
+        - Podkreślić najważniejsze cechy gry planszowej
+        - Wzmocnić wiarygodność opisu poprzez konkretne przykłady
+    3. Formatowanie:
+      - Używaj tagów HTML: <h2>, <p>, <b>, <h3>
+      - Wyróżniaj kluczowe frazy za pomocą <b>
+      - Nie używaj znaczników Markdown, tylko HTML
+      - Nie dodawaj komentarzy ani wyjaśnień, tylko sam opis
+    4. Styl:
+      - Opis ma być angażujący, ale profesjonalny
+      - Używaj słownictwa dostosowanego do miłośników gier planszowych
+      - Unikaj powtórzeń
+      - Zachowaj spójność tonu
     Przykład formatu:
-
-<h2>Niezapomniana rozgrywka w świecie strategii!</h2>
-<p>Gra "Tytuł Gry" to połączenie pasjonującej strategii, emocjonującej rywalizacji oraz doskonałej zabawy, która zjednoczy całą rodzinę. Dzięki unikalnej mechanice, każda rozgrywka dostarcza niezapomnianych wrażeń.</p>
-<p>Podczas gry gracze muszą podejmować strategiczne decyzje, rozwijać umiejętności planowania i współpracy, co sprawia, że każda partia jest inna i pełna emocji.</p>
-<p>Dzięki tej grze rozwijasz swoje umiejętności logicznego myślenia oraz budujesz silne relacje rodzinne, czerpiąc radość z każdej wspólnej rozgrywki.</p>
-<h3>Nie zwlekaj! Dołącz do grona zwycięzców i odkryj magię gry już dziś!</h3>
-```"""
+ ```html
+<h2>nagłówek</h2>
+<p>dwa akapity</p>
+<p>akapit</p>
+<p>akapit</p>
+<h3>CTA</h3>
+```
+"""
 
 # ------------------------#
 # Sidebar – wybór promptu
