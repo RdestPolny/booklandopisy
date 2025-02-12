@@ -6,7 +6,7 @@ import time
 from openai import OpenAI
 
 # ------------------------#
-# Domyślne prompty z unikalnymi zmiennymi
+# Domyślne prompt'y z unikalnymi zmiennymi
 # ------------------------#
 
 default_prompt_lubimyczytac = """Na podstawie poniższych danych stwórz zoptymalizowany pod SEO opis książki w HTML.
@@ -38,69 +38,32 @@ Używaj wyłącznie tagów HTML (nie Markdown) i nie dodawaj dodatkowych komenta
 """
 
 # ------------------------#
-# Pasek boczny – konfiguracja promptów
+# Sidebar – wybór promptu
 # ------------------------#
 
-st.sidebar.header("Konfiguracja promptów")
+selected_prompt = st.sidebar.selectbox("Wybierz prompt", ["LC - książki", "TK - Podręczniki"])
 
-# Konfiguracja promptu dla Lubimy Czytac (uproszczona)
-option_lubimyczytac = st.sidebar.selectbox("Prompt dla Lubimy Czytac", ["Domyślny", "Własny"], key="prompt_lubimy_option")
-if option_lubimyczytac == "Własny":
-    custom_prompt_lubimyczytac = st.sidebar.text_area("Edytuj prompt dla Lubimy Czytac", value="", key="custom_prompt_lubimy")
-else:
-    custom_prompt_lubimyczytac = st.sidebar.text_area("Edytuj prompt dla Lubimy Czytac", value=default_prompt_lubimyczytac, key="custom_prompt_lubimy")
-st.sidebar.markdown(
-    "**Legenda dla Lubimy Czytac:**  \n"
-    "- `{lubimy_description}`: Opis książki  \n"
-    "- `{lubimy_reviews}`: Opinie czytelników"
-)
-
-# Zaawansowana konfiguracja promptów dla taniaksiazka.pl
-if "taniaksiazka_prompts" not in st.session_state:
-    st.session_state.taniaksiazka_prompts = [{"name": "Domyślny", "text": default_prompt_taniaksiazka}]
-
-st.sidebar.header("Prompty dla taniaksiazka.pl")
-selected_taniaksiazka_prompt_index = st.sidebar.selectbox(
-    "Wybierz prompt",
-    list(range(len(st.session_state.taniaksiazka_prompts))),
-    format_func=lambda i: st.session_state.taniaksiazka_prompts[i]["name"],
-    key="selected_taniaksiazka_prompt_index"
-)
-edited_taniaksiazka_prompt = st.sidebar.text_area(
-    "Edytuj wybrany prompt", 
-    value=st.session_state.taniaksiazka_prompts[selected_taniaksiazka_prompt_index]["text"], 
-    key="edited_taniaksiazka_prompt"
-)
-if st.sidebar.button("Zapisz zmiany dla wybranego promptu"):
-    st.session_state.taniaksiazka_prompts[selected_taniaksiazka_prompt_index]["text"] = edited_taniaksiazka_prompt
-    st.sidebar.success("Prompt zaktualizowany!")
-
-st.sidebar.markdown(
-    "**Legenda dla taniaksiazka.pl:**  \n"
-    "- `{taniaksiazka_title}`: Tytuł książki  \n"
-    "- `{taniaksiazka_details}`: Szczegóły produktu  \n"
-    "- `{taniaksiazka_description}`: Opis produktu"
-)
-
-new_prompt_name = st.sidebar.text_input("Nazwa nowego promptu", key="new_prompt_name")
-new_prompt_text = st.sidebar.text_area("Tekst nowego promptu", value="", key="new_prompt_text")
-if st.sidebar.button("Dodaj nowy prompt"):
-    if new_prompt_name and new_prompt_text:
-        st.session_state.taniaksiazka_prompts.append({"name": new_prompt_name, "text": new_prompt_text})
-        st.sidebar.success(f"Prompt '{new_prompt_name}' dodany!")
-    else:
-        st.sidebar.error("Wprowadź nazwę i tekst nowego promptu.")
+if selected_prompt == "LC - książki":
+    st.sidebar.markdown(
+        "**Legenda dla LC - książki:**  \n"
+        "- `{lubimy_description}`: Opis książki  \n"
+        "- `{lubimy_reviews}`: Opinie czytelników"
+    )
+elif selected_prompt == "TK - Podręczniki":
+    st.sidebar.markdown(
+        "**Legenda dla TK - Podręczniki:**  \n"
+        "- `{taniaksiazka_title}`: Tytuł książki  \n"
+        "- `{taniaksiazka_details}`: Szczegóły produktu  \n"
+        "- `{taniaksiazka_description}`: Opis produktu"
+    )
 
 # ------------------------#
 # Główna część aplikacji
 # ------------------------#
 
 st.title('Generator Opisów Książek')
-
-# Inicjalizacja klienta OpenAI
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-# Formularz – użytkownik wkleja URL-e, przetwarzanie uruchamia się po kliknięciu "Uruchom"
 with st.form("url_form"):
     urls_input = st.text_area('Wprowadź adresy URL (po jednym w linii):')
     submit_button = st.form_submit_button("Uruchom")
@@ -276,26 +239,32 @@ if submit_button:
             progress_bar.progress((idx + 1) / len(urls))
             url_lower = url.lower()
             
+            # Dla Lubimy Czytac – oczekiwany prompt to "LC - książki"
             if "lubimyczytac" in url_lower:
+                if selected_prompt != "LC - książki":
+                    st.error(f"Wybrano prompt '{selected_prompt}', ale URL '{url}' pochodzi z Lubimy Czytac. Pomijam ten URL.")
+                    continue
                 book_data = get_lubimyczytac_data(url)
                 if book_data.get('error'):
                     st.error(f"Błąd dla {url}: {book_data['error']}")
                     continue
-                new_description = generate_description_lubimyczytac(book_data, custom_prompt_lubimyczytac)
+                new_description = generate_description_lubimyczytac(book_data, default_prompt_lubimyczytac)
                 results.append({
                     'URL': url,
                     'Stary opis': book_data.get('description', ''),
                     'Opinie': book_data.get('reviews', ''),
                     'Nowy opis': new_description
                 })
+            # Dla taniaksiazka.pl – oczekiwany prompt to "TK - Podręczniki"
             elif "taniaksiazka.pl" in url_lower:
+                if selected_prompt != "TK - Podręczniki":
+                    st.error(f"Wybrano prompt '{selected_prompt}', ale URL '{url}' pochodzi z taniaksiazka.pl. Pomijam ten URL.")
+                    continue
                 book_data = get_taniaksiazka_data(url)
                 if book_data.get('error'):
                     st.error(f"Błąd dla {url}: {book_data['error']}")
                     continue
-                # Używamy wybranego promptu dla taniaksiazka.pl
-                custom_prompt = st.session_state.taniaksiazka_prompts[selected_taniaksiazka_prompt_index]["text"]
-                new_description = generate_description_taniaksiazka(book_data, custom_prompt)
+                new_description = generate_description_taniaksiazka(book_data, default_prompt_taniaksiazka)
                 results.append({
                     'URL': url,
                     'Tytuł': book_data.get('title', ''),
