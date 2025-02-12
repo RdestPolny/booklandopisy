@@ -9,7 +9,7 @@ from openai import OpenAI
 # Domyślne prompt'y z unikalnymi zmiennymi
 # ------------------------#
 
-default_prompt_lubimyczytac = """Stwórz optymalizowany pod SEO opis książki w HTML. Opis powinien:
+default_prompt_lubimyczytac = """Jako autor opisów w księgarni internetowej Bookland, twoim zdaniem jest przygotowanie rzetelnego, zoptymalizowanego opisu produktu o tytule "{lubimy_title}". Oto informacje, na których powinieneś bazować: {lubimy_description} oraz opinie czytelników, które będą Ci potrzebne: {lubimy_reviews}. Stwórz angażujący opis w HTML z wykorzystaniem:<h2>, <p>, <b>, <ul>, <li>. Opis powinien:
 
 Dane:
 Tytuł książki: {lubimy_title}
@@ -17,51 +17,67 @@ Opis książki: {lubimy_description}
 Opinie czytelników: {lubimy_reviews}
 
 Opis powinien zawierać:
-1. Zaczyna się od mocnego nagłówka <h2> z kreatywnym hasłem nawiązującym do treści książki.
-2. Zawiera sekcje:
-   - <p>Wprowadzenie z głównymi zaletami książki</p>
-   - <p>Szczegółowy opis fabuły/treści z <b>wyróżnionymi</b> słowami kluczowymi</p>
-   - <p>Wartości i korzyści dla czytelnika</p>
-   - <p>Podsumowanie opinii czytelników z konkretnymi przykładami</p>
-   - <h3>Przekonujący call to action</h3>
-3. Wykorzystuje opinie czytelników, aby:
+1. Zawiera sekcje:
+   <h2> z kreatywnym hasłem nawiązującym do treści książki.</h2>
+   <p>Wprowadzenie mówiące ogólnie o tym czym jest ta książka</p>
+   <p>Szczegółowy opis fabuły/treści z <b>wyróżnionymi</b> słowami kluczowymi (wykorzystaj informacje z opinii i starego opisu aby poznać fabułę</p>
+   <p>Wartości i korzyści dla czytelnika</p>
+   <p>Podsumowanie opinii czytelników {lubimy_reviews} z konkretnymi przykładami (nie używaj imion autorów)</p>
+   <h3>Przekonujący call to action</h3>
+2. Wykorzystuje opinie czytelników, aby:
    - Podkreślić najczęściej wymieniane zalety książki
    - Wzmocnić wiarygodność opisu
    - Dodać emocje i autentyczność
-4. Formatowanie:
+3. Formatowanie:
    - Używaj tagów HTML: <h2>, <p>, <b>, <h3>
    - Wyróżniaj kluczowe frazy za pomocą <b>
    - Nie używaj znaczników Markdown, tylko HTML
    - Nie dodawaj komentarzy ani wyjaśnień, tylko sam opis
-5. Styl:
+4. Styl:
    - Opis ma być angażujący, ale profesjonalny
    - Używaj słownictwa dostosowanego do gatunku książki
    - Unikaj powtórzeń
    - Zachowaj spójność tonu
-6. Przykład formatu:
+5. Przykład formatu:
 ```html
-<h2>Przygoda na świeżym powietrzu z tatą Oli czeka na każdą rodzinę!</h2>
-<p>„Tata Oli. Tom 3. Z tatą Oli na biwaku” to <b>pełna humoru</b> i <b>przygód</b> opowieść, która z pewnością zachwyci najmłodszych czytelników oraz ich rodziców. Ta książka łączy w sobie <b>fantastyczne ilustracje</b> z doskonałym tekstem, który bawi do łez, a jednocześnie skłania do refleksji nad <b>relacjami rodzinnymi</b>.</p>
-<p>W tej części tata Oli postanawia <b>oderwać dzieci</b> od ekranów i zorganizować im prawdziwy <b>biwak</b>. Wspólnie stają przed nie lada wyzwaniem: muszą <b>rozpalić ognisko</b>, <b>łowić ryby</b> i cieszyć się <b>urokami natury</b>. Jednak zamiast sielanki, napotykają na wiele zabawnych przeszkód, co prowadzi do sytuacji pełnych <b>śmiechu</b> i <b>niespodzianek</b>. Tata Oli, z typową dla siebie pomysłowością, staje przed wyzwaniami, które pokazują, że nie zawsze wszystko idzie zgodnie z planem, a <b>życie na łonie natury</b> może być pełne <b>przygód</b>.</p>
-<p>Książka ta wartościowo rozwija wyobraźnię dzieci, pokazując, że <b>spędzanie czasu z rodziną</b> na świeżym powietrzu może być nie tylko zabawne, ale również <b>edukacyjne</b>. Dzięki humorystycznym sytuacjom z udziałem taty Oli, dzieci uczą się, że dorośli także mają swoje słabości, co czyni tę lekturę <b>uniwersalną</b>.</p>
-<p>„Z tatą Oli na biwaku” to idealna propozycja dla <b>dzieci w wieku przedszkolnym i wczesnoszkolnym</b>, a także dla rodziców, którzy pragną spędzić czas z dziećmi w <b>zabawny</b> i <b>interaktywny</b> sposób. To książka, która rozbawi i dostarczy wielu emocji.</p>
-<p>Czytelnicy zachwycają się nie tylko <b>lekkością</b> i <b>humorem</b> tekstu, ale także <b>ilustracjami</b>, które wzbogacają opowieść. Wiele osób zauważa, że tata Oli staje się wzorem dla dzieci, pokazując, iż <b>rodzicielstwo</b> to sztuka kompromisu i <b>radości</b>, nawet w trudnych sytuacjach.</p>
-<h3>Nie czekaj! Przeżyj niezapomniane chwile z tatą Oli i jego dziećmi na biwaku, zamów swoją książkę już dziś!</h3>
+<h2>nagłówek</h2>
+<p>dwa akapity</p>
+<p>akapit</p>
+<p>akapit</p>
+<h3>CTA</h3>
 ```"""
 
-default_prompt_taniaksiazka = """Na podstawie poniższych danych stwórz angażujący, zoptymalizowany pod SEO opis produktu w HTML.
-Dane:
-Tytuł: {taniaksiazka_title}
-Szczegóły produktu: {taniaksiazka_details}
-Opis produktu: {taniaksiazka_description}
+default_prompt_taniaksiazka = """Jako autor opisów w księgarni internetowej Bookland, twoim zdaniem jest przygotowanie rzetelnego, zoptymalizowanego opisu produktu o tytule "{taniaksiazka_title}". Oto informacje, na których powinieneś bazować: {taniaksiazka_details} {taniaksiazka_description}. Stwórz angażujący opis w HTML z wykorzystaniem:<h2>, <p>, <b>, <ul>, <li>. Opis powinien:
 
-Opis powinien zawierać:
-- Nagłówek <h2> z kreatywnym hasłem odnoszącym się do tytułu.
-- Kilka akapitów <p> z kluczowymi informacjami.
-- Listę <ul><li> z najważniejszymi szczegółami (np. autorzy, rok wydania, oprawa, ilość stron, język, podtytuł, ISBN, dane producenta).
-- Przekonujący call to action w formie <h3>.
+1. Zaczyna się od nagłówka <h2> z kreatywnym hasłem nawiązującym do przedmiotu nauki, z którym związany jest podręcznik oraz jego targetem np. dla uczniów 2 klasy szkoły podstawowej.
+2. Zawiera sekcje:
+   - <p>Wprowadzenie z opisem tego, czym jest dany podręcznik / ćwiczenie / zeszyt ćwiczeń itd. (w zależności od tego, czym jest dany tytuł), informacje na temat jego zawartości, docelowego targetu i tym, co uznasz za stosowne do opisania w kluczowym pierwszym akapicie.</p>
+   - <p>Zalety / szczególne cechy warte podkreślenia, z <b>wyróżnionymi</b> słowami kluczowymi</p>
+   - <p>Wartości i korzyści dla ucznia</p>
+   - <p>Podsumowanie</p>
+   - <h3>Przekonujący call to action</h3>
+3. Wykorzystuje pobrane informacje, aby:
+   - Podkreślić najczęściej wymieniane zalety książki
+   - Wzmocnić wiarygodność opisu
+4. Formatowanie:
+   - Używaj tagów HTML: <h2>, <p>, <b>, <h3>
+   - Wyróżniaj kluczowe frazy lub informacje godne wzmocnienia za pomocą <b>
+   - Nie używaj znaczników Markdown, tylko HTML
+   - Nie dodawaj komentarzy ani wyjaśnień, tylko sam opis
+5. Styl:
+   - Opis ma być angażujący, ale profesjonalny
+   - Używaj słownictwa dostosowanego do odbiorcy
+   - Unikaj powtórzeń
+   - Zachowaj spójność tonu
+6. Przykład formatu:
 
-Używaj wyłącznie tagów HTML (nie Markdown) i nie dodawaj dodatkowych komentarzy.
+```html
+<h2>nagłówek</h2>
+<p>dwa akapity</p>
+<p>akapit</p>
+<p>akapit</p>
+<h3>CTA</h3>
+```
 """
 
 # ------------------------#
