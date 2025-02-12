@@ -193,6 +193,7 @@ def generate_description_taniaksiazka(book_data):
         return ""
 
 # Przetwarzanie danych po zatwierdzeniu formularza
+# Przetwarzanie danych po zatwierdzeniu formularza
 if submit_button:
     if urls_input:
         urls = [url.strip() for url in urls_input.split('\n') if url.strip()]
@@ -204,8 +205,8 @@ if submit_button:
             status_text.info(f'Przetwarzanie {idx+1}/{len(urls)}...')
             progress_bar.progress((idx + 1) / len(urls))
             
-            # Wybór metody pobierania danych w zależności od domeny
-            if "lubimyczytac" in url:
+            # Sprawdzamy domenę, porównując adres URL w wersji lowercase
+            if "lubimyczytac" in url.lower():
                 book_data = get_lubimyczytac_data(url)
                 if book_data.get('error'):
                     st.error(f"Błąd dla {url}: {book_data['error']}")
@@ -217,7 +218,7 @@ if submit_button:
                     'Opinie': book_data.get('reviews', ''),
                     'Nowy opis': new_description
                 })
-            elif "taniaksiazka.pl" in url:
+            elif "taniaksiazka.pl" in url.lower():
                 book_data = get_taniaksiazka_data(url)
                 if book_data.get('error'):
                     st.error(f"Błąd dla {url}: {book_data['error']}")
